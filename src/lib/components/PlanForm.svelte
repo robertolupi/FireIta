@@ -19,27 +19,64 @@
 
   function setStrategy(type: string) {
     if (type === plan.withdrawalStrategy.type) return
-    plan.withdrawalStrategy =
-      type === 'guardrails'
-        ? {
-            type: 'guardrails',
-            initialRate: 0.05,
-            lowerGuardrail: 0.04,
-            upperGuardrail: 0.06,
-            increasePct: 0.1,
-            decreasePct: 0.1
-          }
-        : { type: 'percentCap', rate: 0.04 }
+    if (type === 'guardrails') {
+      plan.withdrawalStrategy = {
+        type: 'guardrails',
+        initialRate: 0.05,
+        lowerGuardrail: 0.04,
+        upperGuardrail: 0.06,
+        increasePct: 0.1,
+        decreasePct: 0.1,
+        skipInflationAfterNegativeReturn: false
+      }
+    } else if (type === 'constantDollar') {
+      plan.withdrawalStrategy = { type: 'constantDollar', rate: 0.04 }
+    } else if (type === 'spendExpenses') {
+      plan.withdrawalStrategy = { type: 'spendExpenses' }
+    } else if (type === 'vpw') {
+      plan.withdrawalStrategy = {
+        type: 'vpw',
+        legacyFraction: 0,
+        minRate: 0,
+        maxRate: 1
+      }
+    } else {
+      plan.withdrawalStrategy = { type: 'percentCap', rate: 0.04 }
+    }
   }
 
   function strategyPercent(
-    key: 'rate' | 'initialRate' | 'lowerGuardrail' | 'upperGuardrail' | 'increasePct' | 'decreasePct'
+    key:
+      | 'rate'
+      | 'initialRate'
+      | 'lowerGuardrail'
+      | 'upperGuardrail'
+      | 'increasePct'
+      | 'decreasePct'
+      | 'legacyFraction'
+      | 'minRate'
+      | 'maxRate'
   ) {
     return (e: Event) => {
       const strategy = plan.withdrawalStrategy
       const value = Number((e.currentTarget as HTMLInputElement).value) / 100
-      if (key === 'rate' && strategy.type === 'percentCap') strategy.rate = value
-      else if (key !== 'rate' && strategy.type === 'guardrails') strategy[key] = value
+      if (key === 'rate' && (strategy.type === 'percentCap' || strategy.type === 'constantDollar')) {
+        strategy.rate = value
+      } else if (
+        (key === 'initialRate' ||
+          key === 'lowerGuardrail' ||
+          key === 'upperGuardrail' ||
+          key === 'increasePct' ||
+          key === 'decreasePct') &&
+        strategy.type === 'guardrails'
+      ) {
+        strategy[key] = value
+      } else if (
+        (key === 'legacyFraction' || key === 'minRate' || key === 'maxRate') &&
+        strategy.type === 'vpw'
+      ) {
+        strategy[key] = value
+      }
     }
   }
 </script>
@@ -109,7 +146,10 @@
         onchange={(e) => setStrategy((e.currentTarget as HTMLSelectElement).value)}
       >
         <option value="percentCap">Tetto percentuale</option>
-        <option value="guardrails">Guardrails</option>
+        <option value="constantDollar">SWR costante (Regola 4%)</option>
+        <option value="spendExpenses">Spese effettive (senza tetto)</option>
+        <option value="guardrails">Guardrails (Guyton-Klinger)</option>
+        <option value="vpw">VPW (Percentuale variabile)</option>
       </select>
     </label>
     {#if ws.type === 'percentCap'}
@@ -117,7 +157,48 @@
         Tetto prelievo (%/anno)
         <input type="number" value={ws.rate * 100} oninput={strategyPercent('rate')} step="0.5" min="0" />
       </label>
-    {:else}
+    {:else if ws.type === 'constantDollar'}
+      <label>
+        Prelievo iniziale (%/anno)
+        <input type="number" value={ws.rate * 100} oninput={strategyPercent('rate')} step="0.5" min="0" />
+      </label>
+    {:else if ws.type === 'spendExpenses'}
+      <p class="derived">Preleva il fabbisogno netto annuo senza tetto percentuale</p>
+    {:else if ws.type === 'vpw'}
+      <label>
+        Eredità finale (%)
+        <input
+          type="number"
+          value={(ws.legacyFraction ?? 0) * 100}
+          oninput={strategyPercent('legacyFraction')}
+          step="5"
+          min="0"
+          max="100"
+        />
+      </label>
+      <label>
+        Prelievo minimo (%/anno)
+        <input
+          type="number"
+          value={(ws.minRate ?? 0) * 100}
+          oninput={strategyPercent('minRate')}
+          step="0.5"
+          min="0"
+          max="100"
+        />
+      </label>
+      <label>
+        Prelievo massimo (%/anno)
+        <input
+          type="number"
+          value={(ws.maxRate ?? 1) * 100}
+          oninput={strategyPercent('maxRate')}
+          step="1"
+          min="0"
+          max="100"
+        />
+      </label>
+    {:else if ws.type === 'guardrails'}
       <label>
         Prelievo iniziale (%)
         <input type="number" value={ws.initialRate * 100} oninput={strategyPercent('initialRate')} step="0.5" min="0" />
@@ -137,6 +218,22 @@
       <label>
         Riduzione spesa (%)
         <input type="number" value={ws.decreasePct * 100} oninput={strategyPercent('decreasePct')} step="1" min="0" />
+      </label>
+      <label>
+        <span>
+          <input
+            type="checkbox"
+            checked={Boolean(ws.skipInflationAfterNegativeReturn)}
+            onchange={(e) => {
+              if (plan.withdrawalStrategy.type === 'guardrails') {
+                plan.withdrawalStrategy.skipInflationAfterNegativeReturn = (
+                  e.currentTarget as HTMLInputElement
+                ).checked
+              }
+            }}
+          />
+          Salta inflazione dopo anno negativo
+        </span>
       </label>
     {/if}
   </fieldset>

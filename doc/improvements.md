@@ -59,7 +59,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Affianca al Monte Carlo log-normale i.i.d. il backtesting su finestre storiche reali (*Rolling Historical Periods*) e il campionamento *Block Bootstrap* di blocchi pluriennali (rendimento + inflazione storica correlata).
   - **File principali**: `src/lib/engine/historicalData.ts`, `src/lib/engine/montecarlo.ts`, `src/lib/engine/projection.ts`, `src/lib/engine/types.ts`.
 
-- [ ] **[09 — Correzione e Arricchimento delle Strategie di Prelievo (Inflazione su Guardrails, SWR Costante, VPW)](./09-engine-withdrawal-strategies.md)**
+- [x] **[09 — Correzione e Arricchimento delle Strategie di Prelievo (Inflazione su Guardrails, SWR Costante, VPW)](./09-engine-withdrawal-strategies.md)**
   - **Complessità**: 🟢 Bassa-Media
   - **Sintesi**: Corregge l'indicizzazione all'inflazione del prelievo nella strategia `guardrails` (Guyton-Klinger) e introduce le strategie `constantDollar` (4% rule classica), `spendExpenses` (fabbisogno puro senza cap) e `vpw` (*Variable Percentage Withdrawal*).
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/projection.ts`, `src/lib/components/PlanForm.svelte`, `src/lib/engine/__tests__/guardrails.test.ts`.

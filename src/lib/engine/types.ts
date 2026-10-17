@@ -1,5 +1,7 @@
 export type WithdrawalStrategy =
   | { type: 'percentCap'; rate: number }
+  | { type: 'constantDollar'; rate: number }
+  | { type: 'spendExpenses' }
   | {
       type: 'guardrails'
       initialRate: number
@@ -7,6 +9,19 @@ export type WithdrawalStrategy =
       upperGuardrail: number
       increasePct: number
       decreasePct: number
+      /** Se true, salta l'adeguamento all'inflazione dopo un anno con rendimento < 0 (Guyton-Klinger Inflation Rule) */
+      skipInflationAfterNegativeReturn?: boolean
+    }
+  | {
+      type: 'vpw'
+      /** Rendimento reale atteso per la formula PMT (se omesso, usa Fisher su meanReturn e inflationRate) */
+      realReturnRate?: number
+      /** Frazione del portafoglio da preservare a fine orizzonte (0..1, default 0) */
+      legacyFraction?: number
+      /** Tasso minimo annuo di prelievo (default 0) */
+      minRate?: number
+      /** Tasso massimo annuo di prelievo (default 1) */
+      maxRate?: number
     }
 
 export type LifeEvent =

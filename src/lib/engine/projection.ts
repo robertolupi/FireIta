@@ -19,6 +19,28 @@ export function effectiveStopYear(plan: Plan): number {
   return stop
 }
 
+export function computeVpwRate(
+  remainingYears: number,
+  realReturnRate: number,
+  legacyFraction = 0,
+  minRate = 0,
+  maxRate = 1
+): number {
+  const n = Math.max(1, Math.floor(remainingYears))
+  const f = Math.max(0, Math.min(1, legacyFraction))
+  let rate: number
+  if (n === 1) {
+    rate = 1 - f
+  } else if (Math.abs(realReturnRate) < 1e-7) {
+    rate = (1 - f) / n
+  } else {
+    const r = realReturnRate
+    const discountN = Math.pow(1 + r, -n)
+    rate = (r * (1 - f * discountN)) / ((1 + r) * (1 - discountN))
+  }
+  return Math.max(minRate, Math.min(maxRate, rate))
+}
+
 export function runProjection(plan: Plan, returns: number[]): YearState[] {
   const horizon = horizonYears(plan)
   const stop = effectiveStopYear(plan)
@@ -117,23 +139,62 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
     portfolio = Math.max(0, portfolio + investmentReturn)
 
     if (retired) {
-      if (plan.withdrawalStrategy.type === 'percentCap') {
-        if (year === stop) retirementBase = startPortfolio * plan.withdrawalStrategy.rate
-        const cap = retirementBase * Math.pow(1 + plan.inflationRate, year - stop)
-        let oneTimeExpenses = 0
-        for (const event of plan.events) {
-          if (event.kind === 'oneTimeExpense' && event.atYear - plan.startYear === year) {
-            oneTimeExpenses += event.amount
-          }
+      let oneTimeExpenses = 0
+      for (const event of plan.events) {
+        if (event.kind === 'oneTimeExpense' && event.atYear - plan.startYear === year) {
+          oneTimeExpenses += event.amount
         }
+      }
+
+      const strategy = plan.withdrawalStrategy
+
+      if (strategy.type === 'percentCap') {
+        if (year === stop) retirementBase = startPortfolio * strategy.rate
+        const cap = retirementBase * Math.pow(1 + plan.inflationRate, year - stop)
         const needed = expenses + oneTimeExpenses
         const obtained = sell(Math.min(needed, cap))
         if (obtained < needed - 1e-9) expensesNotCovered = true
-      } else {
-        const strategy = plan.withdrawalStrategy
+      } else if (strategy.type === 'spendExpenses') {
+        const needed = expenses + oneTimeExpenses
+        const obtained = sell(needed)
+        if (obtained < needed - 1e-9) expensesNotCovered = true
+      } else if (strategy.type === 'constantDollar') {
+        if (year === stop) retirementBase = startPortfolio * strategy.rate
+        const targetWithdrawal = retirementBase * Math.pow(1 + plan.inflationRate, year - stop)
+        const obtained = sell(targetWithdrawal)
+        const oneTimeObtained = oneTimeExpenses > 0 ? sell(oneTimeExpenses) : 0
+        if (obtained < expenses - 1e-9 || oneTimeObtained < oneTimeExpenses - 1e-9) {
+          expensesNotCovered = true
+        }
+      } else if (strategy.type === 'vpw') {
+        const remainingYears = Math.max(1, horizon - year)
+        const defaultRealReturn = (1 + plan.meanReturn) / (1 + plan.inflationRate) - 1
+        const rReal = strategy.realReturnRate ?? defaultRealReturn
+        const vpwRate = computeVpwRate(
+          remainingYears,
+          rReal,
+          strategy.legacyFraction ?? 0,
+          strategy.minRate ?? 0,
+          strategy.maxRate ?? 1
+        )
+        const targetWithdrawal = portfolio * vpwRate
+        const obtained = sell(targetWithdrawal)
+        const oneTimeObtained = oneTimeExpenses > 0 ? sell(oneTimeExpenses) : 0
+        if (obtained < expenses - 1e-9 || oneTimeObtained < oneTimeExpenses - 1e-9) {
+          expensesNotCovered = true
+        }
+      } else if (strategy.type === 'guardrails') {
         if (year === stop) {
           currentWithdrawal = strategy.initialRate * startPortfolio
         } else if (portfolio > 0) {
+          const prevReturn = returns[year - 1] ?? 0
+          const skipInflation =
+            Boolean(strategy.skipInflationAfterNegativeReturn) &&
+            prevReturn < 0 &&
+            plan.inflationRate > 0
+          if (!skipInflation) {
+            currentWithdrawal *= 1 + plan.inflationRate
+          }
           const effectiveRate = currentWithdrawal / portfolio
           if (effectiveRate < strategy.lowerGuardrail) {
             currentWithdrawal *= 1 + strategy.increasePct
@@ -144,14 +205,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
         const obtained = sell(currentWithdrawal)
         // le spese una tantum sono vendite extra sopra il prelievo guardrails:
         // non modificano currentWithdrawal né i futuri aggiustamenti
-        let oneTimeExpenses = 0
-        let oneTimeObtained = 0
-        for (const event of plan.events) {
-          if (event.kind === 'oneTimeExpense' && event.atYear - plan.startYear === year) {
-            oneTimeExpenses += event.amount
-            oneTimeObtained += sell(event.amount)
-          }
-        }
+        const oneTimeObtained = oneTimeExpenses > 0 ? sell(oneTimeExpenses) : 0
         if (obtained < expenses - 1e-9 || oneTimeObtained < oneTimeExpenses - 1e-9) {
           expensesNotCovered = true
         }

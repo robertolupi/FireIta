@@ -79,4 +79,44 @@ describe('strategia guardrails', () => {
     expect(years[0].expensesNotCovered).toBe(false)
     expect(years[1].withdrawal).toBeCloseTo(500)
   })
+
+  it('con inflazione positiva entro il corridoio rivaluta il prelievo e mantiene il potere d’acquisto', () => {
+    const plan = guardrailsPlan({
+      lifeExpectancyAge: 52,
+      initialPortfolio: 100_000,
+      initialCostBasis: 100_000,
+      annualExpenses: 4_800,
+      inflationRate: 0.02
+    })
+    const years = runProjection(plan, [0.07, 0.07, 0.07])
+    expect(years[0].withdrawal).toBeCloseTo(5_000)
+    expect(years[1].withdrawal).toBeCloseTo(5_100)
+    expect(years[2].withdrawal).toBeCloseTo(5_202)
+    expect(years.every((y) => !y.expensesNotCovered)).toBe(true)
+  })
+
+  it('skipInflationAfterNegativeReturn salta l’adeguamento inflattivo dopo un anno con rendimento negativo', () => {
+    const plan = guardrailsPlan({
+      lifeExpectancyAge: 52,
+      initialPortfolio: 100_000,
+      initialCostBasis: 100_000,
+      annualExpenses: 4_800,
+      inflationRate: 0.03,
+      withdrawalStrategy: {
+        type: 'guardrails',
+        initialRate: 0.05,
+        lowerGuardrail: 0.04,
+        upperGuardrail: 0.06,
+        increasePct: 0.1,
+        decreasePct: 0.1,
+        skipInflationAfterNegativeReturn: true
+      }
+    })
+    const years = runProjection(plan, [-0.05, 0.06, 0.06])
+    expect(years[0].withdrawal).toBeCloseTo(5_000)
+    // Anno 1: returns[0] = -0.05 < 0 -> salta inflazione (+3%), 5000 / 95400 = 5.24% (entro [4%, 6%])
+    expect(years[1].withdrawal).toBeCloseTo(5_000)
+    // Anno 2: returns[1] = +0.06 >= 0 -> applica inflazione (+3%) -> 5150
+    expect(years[2].withdrawal).toBeCloseTo(5_150)
+  })
 })
