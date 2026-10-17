@@ -160,16 +160,13 @@ export function computeFireTargetSeries(
     const yearOffset = Math.max(0, calYear - plan.startYear)
 
     let expensesBase = plan.annualExpenses
-    let expensesBaseYear = 0
     for (const change of expenseChanges) {
       if (change.fromYear - plan.startYear <= yearOffset) {
         expensesBase = change.amount
-        expensesBaseYear = change.fromYear - plan.startYear
       }
     }
 
-    const nominalExpenses =
-      expensesBase * Math.pow(1 + plan.inflationRate, yearOffset - expensesBaseYear)
+    const nominalExpenses = expensesBase * Math.pow(1 + plan.inflationRate, yearOffset)
     const nominalTarget = nominalExpenses / swr
 
     if (valueMode === 'real') {

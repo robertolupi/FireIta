@@ -75,7 +75,6 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
   let portfolio = plan.initialPortfolio
   let costBasis = Math.min(plan.initialCostBasis, plan.initialPortfolio)
   let expensesBase = plan.annualExpenses
-  let expensesBaseYear = 0
   let retirementBase = 0
   let currentWithdrawal = 0
   let depleted = portfolio <= 0
@@ -121,13 +120,12 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
     for (const change of expenseChanges) {
       if (change.fromYear - plan.startYear <= year) {
         expensesBase = change.amount
-        expensesBaseYear = change.fromYear - plan.startYear
       }
     }
 
     const retired = year >= stop
     const returnRate = returns[year] ?? 0
-    const expenses = expensesBase * Math.pow(1 + plan.inflationRate, year - expensesBaseYear)
+    const expenses = expensesBase * Math.pow(1 + plan.inflationRate, year)
 
     let contribution = 0
     let withdrawal = 0

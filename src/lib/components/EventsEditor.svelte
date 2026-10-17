@@ -47,7 +47,7 @@
   function describe(event: LifeEvent): string {
     switch (event.kind) {
       case 'setExpenses':
-        return `Dall'età ${ageOf(event.fromYear)} (${event.fromYear}): spese fisse a ${formatEur(event.amount)}/anno`
+        return `Dall'età ${ageOf(event.fromYear)} (${event.fromYear}): spese fisse a ${formatEur(event.amount)}/anno (reali, rivalutate all'inflazione)`
       case 'oneTimeExpense':
         return `Età ${ageOf(event.atYear)} (${event.atYear}): spesa una tantum di ${formatEur(event.amount)}`
       case 'stopWorking':

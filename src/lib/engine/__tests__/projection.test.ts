@@ -215,4 +215,24 @@ describe('runProjection', () => {
     expect(years[4].endPortfolio).toBe(0)
     expect(years[4].expensesNotCovered).toBe(true)
   })
+
+  it('setExpenses considera l\'importo in termini reali (rivalutato all\'inflazione da startYear)', () => {
+    const plan = basePlan({
+      startYear: 2026,
+      birthYear: 1977,
+      retirementAge: 60,
+      lifeExpectancyAge: 53,
+      annualExpenses: 2_000,
+      inflationRate: 0.1,
+      events: [{ kind: 'setExpenses', fromYear: 2028, amount: 1_000 }]
+    })
+    const years = runProjection(plan, [0, 0, 0, 0])
+
+    expect(years[0].expenses).toBeCloseTo(2_000)
+    expect(years[1].expenses).toBeCloseTo(2_200)
+    // Anno 2 (2028): 1_000 € reali * (1.1)^2 = 1_210 € nominali
+    expect(years[2].expenses).toBeCloseTo(1_210)
+    // Anno 3 (2029): 1_000 € reali * (1.1)^3 = 1_331 € nominali
+    expect(years[3].expenses).toBeCloseTo(1_331)
+  })
 })
