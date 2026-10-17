@@ -43,7 +43,7 @@
       </div>
 
       <ResultsSummary {stats} />
-      <FanChart bands={stats.bands} />
+      <FanChart bands={stats.bands} plan={planStore.plan} valueMode={planStore.valueMode} />
       {#if stats.medianRun}
         <YearTable years={stats.medianRun.years} />
       {/if}

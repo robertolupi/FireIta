@@ -11,6 +11,8 @@ export function percentile(sortedValues: number[], p: number): number {
 export interface YearBand {
   year: number
   age: number
+  calendarYear?: number
+  survivalRate?: number
   p10: number
   p25: number
   p50: number
@@ -81,9 +83,12 @@ export function computeStats(results: SimResult[]): SimStats {
   const bands: YearBand[] = []
   for (let year = 0; year < yearCount; year++) {
     const values = results.map((r) => r.years[year].endPortfolio).sort((a, b) => a - b)
+    const aliveCount = results.filter((r) => !r.years[year].depleted).length
     bands.push({
       year,
       age: results[0].years[year].age,
+      calendarYear: results[0].years[year].calendarYear,
+      survivalRate: aliveCount / results.length,
       p10: percentile(values, 10),
       p25: percentile(values, 25),
       p50: percentile(values, 50),

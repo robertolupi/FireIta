@@ -20,7 +20,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Aggiunge uno switch globale per deflazionare tutti i valori monetari in grafici, KPI e tabelle per $(1 + r_{\text{infl}})^t$, eliminando l'illusione monetaria su orizzonti lunghi.
   - **File principali**: `src/lib/stores/plan.svelte.ts`, `src/lib/components/ResultsSummary.svelte`, `src/lib/components/FanChart.svelte`, `src/lib/components/YearTable.svelte`.
 
-- [ ] **[02 — FanChart Interattivo con Crosshair, Tooltip, Marker di Eventi e Soglia Target FIRE](./02-ui-interactive-fanchart.md)**
+- [x] **[02 — FanChart Interattivo con Crosshair, Tooltip, Marker di Eventi e Soglia Target FIRE](./02-ui-interactive-fanchart.md)**
   - **Complessità**: 🟡 Media
   - **Sintesi**: Arricchisce l'SVG del grafico a bande con cursore interattivo (*hover crosshair*), tooltip dettagliato dei percentili per età, linee verticali per pensionamento ed eventi di vita, e curva del Target FIRE.
   - **File principali**: `src/lib/components/FanChart.svelte`, `src/App.svelte`.
