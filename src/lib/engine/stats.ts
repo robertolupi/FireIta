@@ -20,9 +20,18 @@ export interface YearBand {
 
 export interface SimStats {
   runs: number
+  /** Quota di run in cui il patrimonio non si esaurisce (depletionYear === null) */
   successRate: number
+  /** Quota di run con patrimonio integro E 100% delle spese coperte in ogni anno */
+  fullCoverageRate: number
+  /** Quota di run con patrimonio non esaurito ma con almeno 1 anno di spese tagliate */
+  cutSpendingRate: number
+  /** Quota di run con patrimonio esaurito prima della fine dell'orizzonte */
+  depletionRate: number
   finalPercentiles: { p10: number; p25: number; p50: number; p75: number; p90: number }
   meanDepletionAge: number | null
+  meanFirstShortfallAge: number | null
+  meanShortfallYears: number
   bands: YearBand[]
   medianRun: SimResult | null
 }
@@ -32,8 +41,13 @@ export function computeStats(results: SimResult[]): SimStats {
     return {
       runs: 0,
       successRate: 0,
+      fullCoverageRate: 0,
+      cutSpendingRate: 0,
+      depletionRate: 0,
       finalPercentiles: { p10: 0, p25: 0, p50: 0, p75: 0, p90: 0 },
       meanDepletionAge: null,
+      meanFirstShortfallAge: null,
+      meanShortfallYears: 0,
       bands: [],
       medianRun: null
     }
@@ -41,9 +55,27 @@ export function computeStats(results: SimResult[]): SimStats {
 
   const finals = results.map((r) => r.finalPortfolio).sort((a, b) => a - b)
   const successes = results.filter((r) => r.success).length
+  const fullCoverages = results.filter((r) => r.fullCoverage).length
+  const cutSpendingRuns = results.filter((r) => r.success && !r.fullCoverage).length
+  const depletedRuns = results.length - successes
+
   const depletionAges = results
     .filter((r) => r.depletionYear !== null)
     .map((r) => r.years[r.depletionYear as number].age)
+
+  const shortfallRuns = results.filter((r) => r.firstShortfallYear !== null)
+  const firstShortfallAges = shortfallRuns.map(
+    (r) => r.years[r.firstShortfallYear as number].age
+  )
+  const meanFirstShortfallAge =
+    firstShortfallAges.length > 0
+      ? firstShortfallAges.reduce((sum, a) => sum + a, 0) / firstShortfallAges.length
+      : null
+
+  const meanShortfallYears =
+    shortfallRuns.length > 0
+      ? shortfallRuns.reduce((sum, r) => sum + r.shortfallYearsCount, 0) / shortfallRuns.length
+      : 0
 
   const yearCount = results[0].years.length
   const bands: YearBand[] = []
@@ -66,6 +98,9 @@ export function computeStats(results: SimResult[]): SimStats {
   return {
     runs: results.length,
     successRate: successes / results.length,
+    fullCoverageRate: fullCoverages / results.length,
+    cutSpendingRate: cutSpendingRuns / results.length,
+    depletionRate: depletedRuns / results.length,
     finalPercentiles: {
       p10: percentile(finals, 10),
       p25: percentile(finals, 25),
@@ -77,6 +112,8 @@ export function computeStats(results: SimResult[]): SimStats {
       depletionAges.length > 0
         ? depletionAges.reduce((sum, a) => sum + a, 0) / depletionAges.length
         : null,
+    meanFirstShortfallAge,
+    meanShortfallYears,
     bands,
     medianRun
   }

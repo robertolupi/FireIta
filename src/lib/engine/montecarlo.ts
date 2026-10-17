@@ -42,12 +42,19 @@ export function runMonteCarlo(plan: Plan): SimResult[] {
     )
     const years = runProjection(plan, returns)
     const depletedState = years.find((y) => y.depleted)
+    const firstShortfallState = years.find((y) => y.expensesNotCovered)
+    const shortfallYearsCount = years.filter((y) => y.expensesNotCovered).length
+    const survived = !depletedState
+
     results.push({
       run,
       years,
       finalPortfolio: years.length > 0 ? years[years.length - 1].endPortfolio : plan.initialPortfolio,
       depletionYear: depletedState ? depletedState.year : null,
-      success: !depletedState
+      success: survived,
+      firstShortfallYear: firstShortfallState ? firstShortfallState.year : null,
+      shortfallYearsCount,
+      fullCoverage: survived && !firstShortfallState
     })
   }
 

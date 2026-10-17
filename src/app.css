@@ -143,13 +143,19 @@ button.remove {
   min-width: 90px;
 }
 
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 .success-rate {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   border-radius: 6px;
-  margin-bottom: 1rem;
 }
 
 .success-rate .value {
@@ -158,7 +164,14 @@ button.remove {
 }
 
 .success-rate .label {
+  display: flex;
+  flex-direction: column;
   font-size: 0.85rem;
+}
+
+.success-rate .label small {
+  font-size: 0.75rem;
+  opacity: 0.85;
 }
 
 .success-rate.good {
@@ -176,6 +189,67 @@ button.remove {
   color: #b3261e;
 }
 
+.outcome-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #eee;
+  margin-bottom: 0.5rem;
+}
+
+.outcome-bar .seg {
+  height: 100%;
+}
+
+.outcome-bar .seg-full {
+  background: #1b7f3b;
+}
+
+.outcome-bar .seg-cut {
+  background: #d97706;
+}
+
+.outcome-bar .seg-depleted {
+  background: #b91c1c;
+}
+
+.outcome-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  color: #444;
+}
+
+.outcome-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.outcome-legend .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.outcome-legend .dot.full {
+  background: #1b7f3b;
+}
+
+.outcome-legend .dot.cut {
+  background: #d97706;
+}
+
+.outcome-legend .dot.depleted {
+  background: #b91c1c;
+}
+
 .percentiles {
   display: flex;
   gap: 2rem;
@@ -191,4 +265,9 @@ button.remove {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 600;
+}
+
+.diagnostics p {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
 }

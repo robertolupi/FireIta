@@ -74,5 +74,12 @@ export interface SimResult {
   years: YearState[]
   finalPortfolio: number
   depletionYear: number | null
+  /** true se il patrimonio non si è mai esaurito (depletionYear === null) */
   success: boolean
+  /** Primo anno (indice 0-based) in cui expensesNotCovered === true, o null */
+  firstShortfallYear: number | null
+  /** Numero totale di anni nell'orizzonte con expensesNotCovered === true */
+  shortfallYearsCount: number
+  /** true se il patrimonio sopravvive E tutte le spese sono sempre state coperte */
+  fullCoverage: boolean
 }

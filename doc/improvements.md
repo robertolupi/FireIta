@@ -30,7 +30,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Permette di ispezionare in tabella non solo il run mediano (`p50`), ma anche gli scenari avversi (`p10`, `p25`, peggior run o primo fallimento) e di visualizzare la scomposizione dei flussi di cassa annuali.
   - **File principali**: `src/lib/engine/stats.ts`, `src/lib/components/YearTable.svelte`, `src/App.svelte`.
 
-- [ ] **[04 — Distinzione tra "Patrimonio Esaurito" e "Spese Tagliate" nei KPI di Successo](./04-ui-spending-coverage-kpi.md)**
+- [x] **[04 — Distinzione tra "Patrimonio Esaurito" e "Spese Tagliate" nei KPI di Successo](./04-ui-spending-coverage-kpi.md)**
   - **Complessità**: 🟢 Bassa
   - **Sintesi**: Separa il tasso di sopravvivenza del capitale (`!depleted`) dal tasso di copertura integrale delle spese (`!expensesNotCovered`), fondamentale quando si usano strategie dinamiche (`guardrails` o `percentCap`) che evitano il default tagliando i consumi.
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/montecarlo.ts`, `src/lib/engine/stats.ts`, `src/lib/components/ResultsSummary.svelte`.
