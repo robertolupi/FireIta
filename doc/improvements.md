@@ -15,7 +15,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
 
 ### Parte 1 — Interfaccia e Presentazione delle Informazioni (UI/UX)
 
-- [ ] **[01 — Toggle Valori Reali (Oggi €) vs. Valori Nominali (Futuri €)](./01-ui-real-vs-nominal.md)**
+- [x] **[01 — Toggle Valori Reali (Oggi €) vs. Valori Nominali (Futuri €)](./01-ui-real-vs-nominal.md)**
   - **Complessità**: 🟢 Bassa
   - **Sintesi**: Aggiunge uno switch globale per deflazionare tutti i valori monetari in grafici, KPI e tabelle per $(1 + r_{\text{infl}})^t$, eliminando l'illusione monetaria su orizzonti lunghi.
   - **File principali**: `src/lib/stores/plan.svelte.ts`, `src/lib/components/ResultsSummary.svelte`, `src/lib/components/FanChart.svelte`, `src/lib/components/YearTable.svelte`.

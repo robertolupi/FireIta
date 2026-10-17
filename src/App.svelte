@@ -21,6 +21,27 @@
       <EventsEditor />
     </div>
     <div class="column wide">
+      <div class="results-toolbar">
+        <div class="value-mode-toggle" role="group" aria-label="Modalità valuta">
+          <button
+            type="button"
+            class:active={planStore.valueMode === 'real'}
+            onclick={() => (planStore.valueMode = 'real')}
+            title="Importi scontati per l'inflazione al potere d'acquisto di {planStore.plan.startYear}"
+          >
+            Valori Reali (Oggi €)
+          </button>
+          <button
+            type="button"
+            class:active={planStore.valueMode === 'nominal'}
+            onclick={() => (planStore.valueMode = 'nominal')}
+            title="Importi futuri non scontati per l'inflazione"
+          >
+            Valori Nominali (Futuri €)
+          </button>
+        </div>
+      </div>
+
       <ResultsSummary {stats} />
       <FanChart bands={stats.bands} />
       {#if stats.medianRun}

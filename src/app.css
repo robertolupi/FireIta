@@ -271,3 +271,37 @@ button.remove {
   margin: 0.25rem 0;
   font-size: 0.85rem;
 }
+
+.results-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.value-mode-toggle {
+  display: inline-flex;
+  border: 1px solid #c3d2e3;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.value-mode-toggle button {
+  border: none;
+  border-radius: 0;
+  background: #fff;
+  color: #1a5fa8;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.value-mode-toggle button.active {
+  background: #1a5fa8;
+  color: #fff;
+}
+
+.value-mode-note {
+  margin: -0.25rem 0 0.75rem;
+}

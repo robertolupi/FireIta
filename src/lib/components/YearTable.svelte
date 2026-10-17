@@ -1,13 +1,19 @@
 <script lang="ts">
   import type { YearState } from '../engine/types'
   import { formatEur, formatPct } from '../format'
+  import { planStore } from '../stores/plan.svelte'
 
   let { years }: { years: YearState[] } = $props()
   let hasPensionFund = $derived(years.some((y) => y.pensionFundBalance !== undefined))
+  let unitSuffix = $derived(planStore.valueMode === 'real' ? '€ (reali)' : '€ (nom.)')
 </script>
 
 <section class="card">
-  <h2>Scenario mediano anno per anno</h2>
+  <h2>
+    Scenario mediano anno per anno ({planStore.valueMode === 'real'
+      ? `€ reali ${planStore.plan.startYear}`
+      : '€ nominali'})
+  </h2>
 
   <div class="table-wrapper">
     <table>
@@ -16,17 +22,17 @@
           <th>Età</th>
           <th>Anno</th>
           <th>Fase</th>
-          <th>Entrate</th>
-          <th>Spese</th>
-          <th>Versamento</th>
-          <th>Prelievo netto</th>
+          <th>Entrate {unitSuffix}</th>
+          <th>Spese {unitSuffix}</th>
+          <th>Versamento {unitSuffix}</th>
+          <th>Prelievo netto {unitSuffix}</th>
           <th title="Prelievo netto come percentuale del patrimonio a inizio anno">Spesa %</th>
           <th>Rendimento</th>
-          <th title="Imposte su plusvalenze, bollo 0,20% e RITA">Tasse</th>
+          <th title="Imposte su plusvalenze, bollo 0,20% e RITA">Tasse {unitSuffix}</th>
           {#if hasPensionFund}
-            <th>Fondo Pensione</th>
+            <th>Fondo Pensione {unitSuffix}</th>
           {/if}
-          <th>Patrimonio fine anno</th>
+          <th>Patrimonio fine anno {unitSuffix}</th>
         </tr>
       </thead>
       <tbody>

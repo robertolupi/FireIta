@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { YearBand } from '../engine/stats'
   import { formatEurCompact } from '../format'
+  import { planStore } from '../stores/plan.svelte'
 
   let { bands }: { bands: YearBand[] } = $props()
 
@@ -58,7 +59,11 @@
 
 <section class="card">
   <div class="header">
-    <h2>Evoluzione del patrimonio (fan chart)</h2>
+    <h2>
+      Evoluzione del patrimonio ({planStore.valueMode === 'real'
+        ? `€ reali ${planStore.plan.startYear}`
+        : '€ nominali'})
+    </h2>
     <div class="scale-toggle" role="group" aria-label="Scala asse Y">
       <button class:active={!logScale} onclick={() => (logScale = false)}>Lineare</button>
       <button class:active={logScale} onclick={() => (logScale = true)}>Log</button>

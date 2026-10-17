@@ -1,5 +1,6 @@
 import { runMonteCarlo } from '../engine/montecarlo'
 import { computeStats, type SimStats } from '../engine/stats'
+import { transformSimStats, type ValueMode } from '../engine/deflate'
 import type { Plan, SimResult } from '../engine/types'
 
 function createPlanStore() {
@@ -25,16 +26,30 @@ function createPlanStore() {
     events: []
   })
 
+  let valueMode = $state<ValueMode>('real')
+
   const results: SimResult[] = $derived(runMonteCarlo(plan))
-  const stats: SimStats = $derived(computeStats(results))
+  const rawStats: SimStats = $derived(computeStats(results))
+  const displayStats: SimStats = $derived(
+    transformSimStats(rawStats, plan.startYear, plan.inflationRate, valueMode)
+  )
 
   return {
     plan,
+    get valueMode() {
+      return valueMode
+    },
+    set valueMode(v: ValueMode) {
+      valueMode = v
+    },
     get results() {
       return results
     },
     get stats() {
-      return stats
+      return displayStats
+    },
+    get rawStats() {
+      return rawStats
     }
   }
 }

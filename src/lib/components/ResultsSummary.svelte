@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { SimStats } from '../engine/stats'
   import { formatEur, formatPct } from '../format'
+  import { planStore } from '../stores/plan.svelte'
 
   let { stats }: { stats: SimStats } = $props()
 
@@ -81,6 +82,12 @@
       <dd>{formatEur(stats.finalPercentiles.p90)}</dd>
     </div>
   </dl>
+  <p class="derived value-mode-note">
+    Patrimonio finale espresso in €
+    {planStore.valueMode === 'real'
+      ? `del ${planStore.plan.startYear} (potere d'acquisto costante)`
+      : 'nominali futuri'}
+  </p>
 
   <div class="diagnostics">
     <p>
