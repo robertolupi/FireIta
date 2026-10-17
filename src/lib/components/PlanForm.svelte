@@ -1,5 +1,6 @@
 <script lang="ts">
   import { planStore } from '../stores/plan.svelte'
+  import { effectiveCapitalGainsTaxRate } from '../engine/tax'
 
   const plan = planStore.plan
 
@@ -8,10 +9,38 @@
   let retirementInfo = $derived(
     retirementYear <= plan.startYear ? 'già in pensione' : `pensionamento nel ${retirementYear}`
   )
+  let effectiveCgTax = $derived(
+    effectiveCapitalGainsTaxRate(plan.taxRate, plan.whitelistAllocation ?? 0)
+  )
 
-  function setPercent(key: 'incomeGrowthRate' | 'inflationRate' | 'meanReturn' | 'returnStdDev' | 'taxRate') {
+  function setPercent(
+    key:
+      | 'incomeGrowthRate'
+      | 'inflationRate'
+      | 'meanReturn'
+      | 'returnStdDev'
+      | 'taxRate'
+      | 'stampDutyRate'
+      | 'whitelistAllocation'
+  ) {
     return (e: Event) => {
       plan[key] = Number((e.currentTarget as HTMLInputElement).value) / 100
+    }
+  }
+
+  function togglePensionFund(e: Event) {
+    const checked = (e.currentTarget as HTMLInputElement).checked
+    if (checked) {
+      plan.pensionFund = {
+        initialBalance: 20_000,
+        initialSeniorityYears: 10,
+        annualContribution: 5164.57,
+        irpefMarginalRate: 0.35,
+        ritaStartAge: 57,
+        ritaEndAge: 67
+      }
+    } else {
+      plan.pensionFund = undefined
     }
   }
 
@@ -249,9 +278,84 @@
       <input type="number" value={plan.returnStdDev * 100} oninput={setPercent('returnStdDev')} step="0.5" min="0" />
     </label>
     <label>
-      Aliquota plusvalenze (%)
+      Aliquota plusvalenze ordinaria (%)
       <input type="number" value={plan.taxRate * 100} oninput={setPercent('taxRate')} step="1" min="0" />
     </label>
+    <label>
+      Quota Titoli White List 12,5% (%)
+      <input
+        type="number"
+        value={(plan.whitelistAllocation ?? 0) * 100}
+        oninput={setPercent('whitelistAllocation')}
+        step="5"
+        min="0"
+        max="100"
+      />
+    </label>
+    <label>
+      Imposta di bollo dossier (%/anno)
+      <input
+        type="number"
+        value={Number(((plan.stampDutyRate ?? 0) * 100).toFixed(3))}
+        oninput={setPercent('stampDutyRate')}
+        step="0.05"
+        min="0"
+      />
+    </label>
+    {#if (plan.whitelistAllocation ?? 0) > 0}
+      <p class="derived">Aliquota plusvalenze effettiva: {(effectiveCgTax * 100).toFixed(2)}%</p>
+    {/if}
+  </fieldset>
+
+  <fieldset>
+    <legend>Fondo Pensione / RITA</legend>
+    <label>
+      <span>
+        <input
+          type="checkbox"
+          checked={Boolean(plan.pensionFund)}
+          onchange={togglePensionFund}
+        />
+        Attiva Fondo Pensione / RITA
+      </span>
+    </label>
+    {#if plan.pensionFund}
+      <label>
+        Montante iniziale (€)
+        <input type="number" bind:value={plan.pensionFund.initialBalance} min="0" step="1000" />
+      </label>
+      <label>
+        Anzianità pregressa (anni)
+        <input type="number" bind:value={plan.pensionFund.initialSeniorityYears} min="0" step="1" />
+      </label>
+      <label>
+        Versamento annuo in accumulo (€)
+        <input type="number" bind:value={plan.pensionFund.annualContribution} min="0" step="100" />
+      </label>
+      <label>
+        Aliquota marginale IRPEF (%)
+        <input
+          type="number"
+          value={plan.pensionFund.irpefMarginalRate * 100}
+          oninput={(e) => {
+            if (plan.pensionFund) {
+              plan.pensionFund.irpefMarginalRate = Number((e.currentTarget as HTMLInputElement).value) / 100
+            }
+          }}
+          step="1"
+          min="0"
+          max="100"
+        />
+      </label>
+      <label>
+        Età avvio RITA
+        <input type="number" bind:value={plan.pensionFund.ritaStartAge} min="0" step="1" />
+      </label>
+      <label>
+        Età termine RITA
+        <input type="number" bind:value={plan.pensionFund.ritaEndAge} min="0" step="1" />
+      </label>
+    {/if}
   </fieldset>
 
   <fieldset>

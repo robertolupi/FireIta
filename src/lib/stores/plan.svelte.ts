@@ -19,6 +19,8 @@ function createPlanStore() {
     runs: 1_000,
     seed: 42,
     taxRate: 0.26,
+    stampDutyRate: 0.002,
+    whitelistAllocation: 0,
     withdrawalStrategy: { type: 'percentCap', rate: 0.04 },
     events: []
   })

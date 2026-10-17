@@ -3,6 +3,7 @@
   import { formatEur, formatPct } from '../format'
 
   let { years }: { years: YearState[] } = $props()
+  let hasPensionFund = $derived(years.some((y) => y.pensionFundBalance !== undefined))
 </script>
 
 <section class="card">
@@ -21,7 +22,10 @@
           <th>Prelievo netto</th>
           <th title="Prelievo netto come percentuale del patrimonio a inizio anno">Spesa %</th>
           <th>Rendimento</th>
-          <th>Tasse</th>
+          <th title="Imposte su plusvalenze, bollo 0,20% e RITA">Tasse</th>
+          {#if hasPensionFund}
+            <th>Fondo Pensione</th>
+          {/if}
           <th>Patrimonio fine anno</th>
         </tr>
       </thead>
@@ -46,7 +50,16 @@
             </td>
             <td>{y.withdrawal > 0 && y.startPortfolio > 0 ? formatPct(y.withdrawal / y.startPortfolio) : '—'}</td>
             <td title={formatEur(y.investmentReturn)}>{formatPct(y.returnRate)}</td>
-            <td>{y.taxPaid > 0 ? formatEur(y.taxPaid) : '—'}</td>
+            <td
+              title={y.stampDutyPaid && y.stampDutyPaid > 0
+                ? `di cui imposta di bollo: ${formatEur(y.stampDutyPaid)}`
+                : undefined}
+            >
+              {y.taxPaid > 0 ? formatEur(y.taxPaid) : '—'}
+            </td>
+            {#if hasPensionFund}
+              <td>{formatEur(y.pensionFundBalance ?? 0)}</td>
+            {/if}
             <td>{formatEur(y.endPortfolio)}{y.depleted ? ' (esaurito)' : ''}</td>
           </tr>
         {/each}

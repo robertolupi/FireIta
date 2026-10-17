@@ -49,7 +49,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
 
 ### Parte 2 — Motore di Simulazione e Metodologie (Quant & Fiscalità Italiana)
 
-- [ ] **[07 — Fiscalità e Previdenza Italiana Realistica (Imposta di Bollo 0,20%, INPS, Fondo Pensione)](./07-engine-italian-tax-pension.md)**
+- [x] **[07 — Fiscalità e Previdenza Italiana Realistica (Imposta di Bollo 0,20%, INPS, Fondo Pensione)](./07-engine-italian-tax-pension.md)**
   - **Complessità**: 🟡 Media
   - **Sintesi**: Introduce l'imposta di bollo patrimoniale dello 0,20% annuo sul dossier titoli, le entrate previdenziali ricorrenti post-ritiro (es. pensione pubblica INPS o rendite), l'aliquota mista white-list (12,5% vs 26%) e/o la gestione Fondo Pensione / RITA.
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/tax.ts`, `src/lib/engine/projection.ts`, `src/lib/components/PlanForm.svelte`, `src/lib/components/EventsEditor.svelte`.

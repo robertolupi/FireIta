@@ -28,6 +28,33 @@ export type LifeEvent =
   | { kind: 'setExpenses'; fromYear: number; amount: number }
   | { kind: 'oneTimeExpense'; atYear: number; amount: number }
   | { kind: 'stopWorking'; atYear: number }
+  | {
+      kind: 'recurringIncome'
+      fromYear: number
+      toYear?: number
+      amount: number
+      /** Se true (default), l'importo è rivalutato all'inflazione (es. Pensione INPS perequata ISTAT) */
+      inflationAdjusted?: boolean
+    }
+
+export interface PensionFundConfig {
+  /** Montante già presente nel fondo pensione a inizio piano */
+  initialBalance: number
+  /** Quota del montante soggetta a tassazione finale (contributi dedotti + TFR); default = initialBalance */
+  initialTaxableBase?: number
+  /** Anni di anzianità pregressa nel fondo pensione a startYear */
+  initialSeniorityYears: number
+  /** Versamento annuo durante la fase di accumulo (es. 5164.57) */
+  annualContribution: number
+  /** Aliquota marginale IRPEF per il rimborso da deduzione (es. 0.35 o 0.43) */
+  irpefMarginalRate: number
+  /** Delta rendimento annuo rispetto al portafoglio principale (default 0) */
+  returnRateOffset?: number
+  /** Età di avvio erogazione RITA / rendita (es. 57) */
+  ritaStartAge: number
+  /** Età di termine RITA (es. 67, coincidente con l'avvio pensione INPS) */
+  ritaEndAge: number
+}
 
 export interface Plan {
   startYear: number
@@ -45,6 +72,12 @@ export interface Plan {
   runs: number
   seed: number
   taxRate: number
+  /** Aliquota imposta di bollo annua sul dossier titoli (default 0, tipico Italia: 0.002 = 0,20%) */
+  stampDutyRate?: number
+  /** Quota di portafoglio in Titoli di Stato White List tassati al 12,5% anziché taxRate (0..1, default 0) */
+  whitelistAllocation?: number
+  /** Configurazione opzionale Fondo Pensione Complementare / RITA */
+  pensionFund?: PensionFundConfig
   withdrawalStrategy: WithdrawalStrategy
   events: LifeEvent[]
 }
@@ -60,6 +93,10 @@ export interface YearState {
   withdrawal: number
   grossSale: number
   taxPaid: number
+  /** Di cui imposta di bollo pagata nell'anno */
+  stampDutyPaid?: number
+  /** Saldo residuo del fondo pensione a fine anno (se pensionFund è attivo) */
+  pensionFundBalance?: number
   returnRate: number
   investmentReturn: number
   startPortfolio: number
