@@ -49,7 +49,7 @@ describe('strategie di prelievo avanzate (constantDollar, spendExpenses, vpw)', 
     expect(swrYears.every((y) => !y.expensesNotCovered)).toBe(true)
   })
 
-  it('constantDollar gestisce spese una tantum separatamente e segnala expensesNotCovered se superano la rata', () => {
+  it('constantDollar usa le spese come minimo vitale se superano la rata SWR e aggiunge le spese una tantum', () => {
     const plan = makePlan({
       lifeExpectancyAge: 52,
       annualExpenses: 5_000,
@@ -58,8 +58,9 @@ describe('strategie di prelievo avanzate (constantDollar, spendExpenses, vpw)', 
       events: [{ kind: 'oneTimeExpense', atYear: 2026, amount: 1_000 }]
     })
     const years = runProjection(plan, [0, 0])
-    expect(years[0].withdrawal).toBeCloseTo(5_000) // 4000 SWR + 1000 oneTime
-    expect(years[0].expensesNotCovered).toBe(true) // 4000 < 5000 expenses
+    expect(years[0].withdrawal).toBeCloseTo(6_000) // max(4000 SWR, 5000 spese) + 1000 oneTime
+    expect(years[0].expensesNotCovered).toBe(false)
+    expect(years[1].withdrawal).toBeCloseTo(5_000)
   })
 
   it('spendExpenses preleva esattamente il fabbisogno effettivo senza tetto artificiale', () => {

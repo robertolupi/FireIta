@@ -247,14 +247,17 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
         }
       } else if (strategy.type === 'constantDollar') {
         if (year === stop) retirementBase = startPortfolio * strategy.rate
-        const targetWithdrawal = retirementBase * Math.pow(1 + plan.inflationRate, year - stop)
-        if (income > Math.max(targetWithdrawal, expenses) + oneTimeExpenses) {
+        const targetWithdrawal = Math.max(
+          retirementBase * Math.pow(1 + plan.inflationRate, year - stop),
+          expenses
+        )
+        if (income > targetWithdrawal + oneTimeExpenses) {
           const surplus = income - totalNeeded
           contribution = surplus
           portfolio += surplus
           costBasis += surplus
         } else {
-          const incomeForBase = Math.min(income, Math.max(targetWithdrawal, expenses))
+          const incomeForBase = Math.min(income, targetWithdrawal)
           const remIncome = Math.max(0, income - incomeForBase)
           const netTarget = Math.max(0, targetWithdrawal - income)
           const netOneTime = Math.max(0, oneTimeExpenses - remIncome)
@@ -265,6 +268,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
             remIncome + oneTimeObtained < oneTimeExpenses - 1e-9
           ) {
             expensesNotCovered = true
+            depleted = true
           }
         }
       } else if (strategy.type === 'vpw') {
@@ -278,14 +282,14 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           strategy.minRate ?? 0,
           strategy.maxRate ?? 1
         )
-        const targetWithdrawal = portfolio * vpwRate
-        if (income > Math.max(targetWithdrawal, expenses) + oneTimeExpenses) {
+        const targetWithdrawal = Math.max(portfolio * vpwRate, expenses)
+        if (income > targetWithdrawal + oneTimeExpenses) {
           const surplus = income - totalNeeded
           contribution = surplus
           portfolio += surplus
           costBasis += surplus
         } else {
-          const incomeForBase = Math.min(income, Math.max(targetWithdrawal, expenses))
+          const incomeForBase = Math.min(income, targetWithdrawal)
           const remIncome = Math.max(0, income - incomeForBase)
           const netTarget = Math.max(0, targetWithdrawal - income)
           const netOneTime = Math.max(0, oneTimeExpenses - remIncome)
@@ -296,6 +300,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
             remIncome + oneTimeObtained < oneTimeExpenses - 1e-9
           ) {
             expensesNotCovered = true
+            depleted = true
           }
         }
       } else if (strategy.type === 'guardrails') {
