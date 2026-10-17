@@ -300,7 +300,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
         }
       } else if (strategy.type === 'guardrails') {
         if (year === stop) {
-          currentWithdrawal = strategy.initialRate * startPortfolio
+          currentWithdrawal = Math.max(strategy.initialRate * startPortfolio, expenses)
         } else if (portfolio > 0) {
           const prevReturn = returns[year - 1] ?? 0
           const skipInflation =
@@ -316,14 +316,15 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           } else if (effectiveRate > strategy.upperGuardrail) {
             currentWithdrawal *= 1 - strategy.decreasePct
           }
+          currentWithdrawal = Math.max(currentWithdrawal, expenses)
         }
-        if (income > Math.max(currentWithdrawal, expenses) + oneTimeExpenses) {
+        if (income > currentWithdrawal + oneTimeExpenses) {
           const surplus = income - totalNeeded
           contribution = surplus
           portfolio += surplus
           costBasis += surplus
         } else {
-          const incomeForBase = Math.min(income, Math.max(currentWithdrawal, expenses))
+          const incomeForBase = Math.min(income, currentWithdrawal)
           const remIncome = Math.max(0, income - incomeForBase)
           const netTarget = Math.max(0, currentWithdrawal - income)
           const netOneTime = Math.max(0, oneTimeExpenses - remIncome)
@@ -336,6 +337,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
             remIncome + oneTimeObtained < oneTimeExpenses - 1e-9
           ) {
             expensesNotCovered = true
+            depleted = true
           }
         }
       }

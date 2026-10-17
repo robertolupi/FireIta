@@ -69,7 +69,7 @@ describe('computeStats — KPI sopravvivenza patrimonio vs copertura spese', () 
     expect(stats.meanShortfallYears).toBe(30)
   })
 
-  it('scenario guardrails sotto stress: successRate > fullCoverageRate e meanFirstShortfallAge valido', () => {
+  it('scenario guardrails sotto stress: le spese configurate fanno da pavimento minimo e i run insufficienti vanno in deplezione', () => {
     const plan = basePlan({
       initialPortfolio: 500_000,
       annualExpenses: 24_000,
@@ -87,12 +87,11 @@ describe('computeStats — KPI sopravvivenza patrimonio vs copertura spese', () 
       }
     })
     const stats = computeStats(runMonteCarlo(plan))
-    expect(stats.successRate).toBeGreaterThan(stats.fullCoverageRate)
-    expect(stats.cutSpendingRate).toBeGreaterThan(0)
-    expect(stats.meanFirstShortfallAge).not.toBeNull()
-    expect(stats.meanFirstShortfallAge as number).toBeGreaterThanOrEqual(50)
-    expect(stats.meanFirstShortfallAge as number).toBeLessThanOrEqual(80)
-    expect(stats.meanShortfallYears).toBeGreaterThan(0)
+    // Con le spese come minimo vitale in guardrails, ogni run che sopravvive copre sempre le spese
+    expect(stats.fullCoverageRate).toBeCloseTo(stats.successRate, 10)
+    expect(stats.cutSpendingRate).toBe(0)
+    expect(stats.depletionRate).toBeGreaterThan(0)
+    expect(stats.meanDepletionAge).not.toBeNull()
   })
 
   it('compareSimRuns ordina le run fallite per anno di sopravvivenza e le sopravvissute per finalPortfolio', () => {

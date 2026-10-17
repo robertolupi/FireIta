@@ -59,14 +59,32 @@ describe('strategia guardrails', () => {
     expect(years[1].endPortfolio).toBeCloseTo(4_300)
   })
 
-  it('expensesNotCovered quando il prelievo guardrails scende sotto le spese', () => {
-    const covered = runProjection(guardrailsPlan({ annualExpenses: 400 }), [0, 0])
+  it('usa le spese configurate come prelievo minimo se il capitale lo consente, e fallisce/esaurisce se insufficiente', () => {
+    // Capitale sufficiente (10.000 €): guardrail 5% = 500 €, ma spese = 600 € -> preleva 600 €
+    const covered = runProjection(guardrailsPlan({ annualExpenses: 600 }), [0, 0])
+    expect(covered[0].withdrawal).toBeCloseTo(600)
+    expect(covered[0].endPortfolio).toBeCloseTo(9_400)
     expect(covered[0].expensesNotCovered).toBe(false)
+    expect(covered[0].depleted).toBe(false)
 
-    const uncovered = runProjection(guardrailsPlan({ annualExpenses: 600 }), [0, 0])
-    expect(uncovered[0].withdrawal).toBeCloseTo(500)
-    expect(uncovered[0].expensesNotCovered).toBe(true)
-    expect(uncovered[1].expensesNotCovered).toBe(true)
+    // Anche dopo un crollo (-50%), il prelievo non scende sotto le spese minime (600 €) finché c'è capitale
+    const afterCrash = runProjection(guardrailsPlan({ annualExpenses: 600 }), [0, -0.5, 0])
+    expect(afterCrash[1].withdrawal).toBeCloseTo(600)
+    expect(afterCrash[1].expensesNotCovered).toBe(false)
+
+    // Capitale insufficiente a coprire il minimo di sopravvivenza (1.000 € con spese 600 €/anno):
+    // Anno 0 copre 600 € (residuo 400 €), Anno 1 esaurisce i 400 € e fallisce
+    const depletedRun = runProjection(
+      guardrailsPlan({ initialPortfolio: 1_000, initialCostBasis: 1_000, annualExpenses: 600 }),
+      [0, 0, 0]
+    )
+    expect(depletedRun[0].withdrawal).toBeCloseTo(600)
+    expect(depletedRun[0].depleted).toBe(false)
+    expect(depletedRun[0].expensesNotCovered).toBe(false)
+    expect(depletedRun[1].withdrawal).toBeCloseTo(400)
+    expect(depletedRun[1].endPortfolio).toBe(0)
+    expect(depletedRun[1].depleted).toBe(true)
+    expect(depletedRun[1].expensesNotCovered).toBe(true)
   })
 
   it('spese una tantum: vendita extra che non modifica il prelievo guardrails', () => {
