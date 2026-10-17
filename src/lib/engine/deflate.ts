@@ -1,5 +1,5 @@
-import type { YearState } from './types'
-import type { SimStats, YearBand } from './stats'
+import type { SimResult, YearState } from './types'
+import type { PercentileRuns, SimStats, YearBand } from './stats'
 
 export type ValueMode = 'nominal' | 'real'
 
@@ -21,7 +21,12 @@ export function deflateYearState(
   startYear: number,
   inflationRate: number
 ): YearState {
-  const yearRef = state.year >= startYear ? state.year : state.calendarYear >= startYear ? state.calendarYear : state.year
+  const yearRef =
+    state.year >= startYear
+      ? state.year
+      : state.calendarYear >= startYear
+        ? state.calendarYear
+        : state.year
   const d = inflationDivisor(yearRef, startYear, inflationRate)
   if (d === 1) return state
 
@@ -65,6 +70,20 @@ export function deflateYearBand(
   }
 }
 
+function deflateSimResult(
+  run: SimResult | null,
+  startYear: number,
+  inflationRate: number
+): SimResult | null {
+  if (!run) return null
+  const years = run.years.map((y) => deflateYearState(y, startYear, inflationRate))
+  return {
+    ...run,
+    years,
+    finalPortfolio: years.length > 0 ? years[years.length - 1].endPortfolio : 0
+  }
+}
+
 /**
  * Converte l'intero oggetto SimStats nel ValueMode richiesto.
  */
@@ -89,26 +108,22 @@ export function transformSimStats(
       }
     : stats.finalPercentiles
 
-  const medianRun = stats.medianRun
-    ? {
-        ...stats.medianRun,
-        years: stats.medianRun.years.map((y) => deflateYearState(y, startYear, inflationRate)),
-        finalPortfolio:
-          stats.medianRun.years.length > 0
-            ? stats.medianRun.years[stats.medianRun.years.length - 1].endPortfolio /
-              inflationDivisor(
-                stats.medianRun.years[stats.medianRun.years.length - 1].year,
-                startYear,
-                inflationRate
-              )
-            : 0
-      }
-    : null
+  const percentileRuns: PercentileRuns = {
+    p10: deflateSimResult(stats.percentileRuns.p10, startYear, inflationRate),
+    p25: deflateSimResult(stats.percentileRuns.p25, startYear, inflationRate),
+    p50: deflateSimResult(stats.percentileRuns.p50, startYear, inflationRate),
+    p75: deflateSimResult(stats.percentileRuns.p75, startYear, inflationRate),
+    p90: deflateSimResult(stats.percentileRuns.p90, startYear, inflationRate)
+  }
+
+  const medianRun =
+    percentileRuns.p50 ?? deflateSimResult(stats.medianRun, startYear, inflationRate)
 
   return {
     ...stats,
     bands,
     finalPercentiles,
-    medianRun
+    medianRun,
+    percentileRuns
   }
 }

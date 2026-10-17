@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Plan } from '../types'
+import type { Plan, SimResult } from '../types'
 import { runMonteCarlo } from '../montecarlo'
-import { computeStats } from '../stats'
+import { compareSimRuns, computeStats } from '../stats'
 
 function basePlan(overrides: Partial<Plan> = {}): Plan {
   return {
@@ -37,6 +37,7 @@ describe('computeStats — KPI sopravvivenza patrimonio vs copertura spese', () 
     expect(stats.meanDepletionAge).toBeNull()
     expect(stats.meanFirstShortfallAge).toBeNull()
     expect(stats.meanShortfallYears).toBe(0)
+    expect(stats.percentileRuns.p50).toBeNull()
   })
 
   it('invariante di partizione: fullCoverageRate + cutSpendingRate = successRate e successRate + depletionRate = 1', () => {
@@ -92,5 +93,77 @@ describe('computeStats — KPI sopravvivenza patrimonio vs copertura spese', () 
     expect(stats.meanFirstShortfallAge as number).toBeGreaterThanOrEqual(50)
     expect(stats.meanFirstShortfallAge as number).toBeLessThanOrEqual(80)
     expect(stats.meanShortfallYears).toBeGreaterThan(0)
+  })
+
+  it('compareSimRuns ordina le run fallite per anno di sopravvivenza e le sopravvissute per finalPortfolio', () => {
+    const makeFakeRun = (run: number, surviveCount: number, total: number, finalPortfolio: number): SimResult => ({
+      run,
+      years: Array.from({ length: total }, (_, i) => ({
+        year: i,
+        age: 50 + i,
+        calendarYear: 2026 + i,
+        phase: 'retirement',
+        income: 0,
+        expenses: 10_000,
+        contribution: 0,
+        withdrawal: 10_000,
+        grossSale: 10_000,
+        taxPaid: 0,
+        returnRate: 0,
+        investmentReturn: 0,
+        startPortfolio: i < surviveCount ? 50_000 : 0,
+        endPortfolio: i < surviveCount ? (i === total - 1 ? finalPortfolio : 40_000) : 0,
+        endCostBasis: 0,
+        expensesNotCovered: i >= surviveCount,
+        depleted: i >= surviveCount
+      })),
+      finalPortfolio,
+      depletionYear: surviveCount < total ? surviveCount : null,
+      success: surviveCount === total,
+      firstShortfallYear: surviveCount < total ? surviveCount : null,
+      shortfallYearsCount: total - surviveCount,
+      fullCoverage: surviveCount === total
+    })
+
+    const runA = makeFakeRun(0, 10, 30, 0)
+    const runB = makeFakeRun(1, 20, 30, 0)
+    const runC = makeFakeRun(2, 30, 30, 150_000)
+
+    expect(compareSimRuns(runA, runB)).toBeLessThan(0)
+    expect(compareSimRuns(runB, runC)).toBeLessThan(0)
+    expect(compareSimRuns(runA, runC)).toBeLessThan(0)
+  })
+
+  it('percentileRuns popola p10..p90 in ordine monotono e mantiene coerenza contabile intra-traiettoria', () => {
+    const plan = basePlan({
+      initialPortfolio: 450_000,
+      initialCostBasis: 350_000,
+      annualExpenses: 22_000,
+      taxRate: 0.26,
+      stampDutyRate: 0,
+      returnStdDev: 0.16,
+      runs: 100,
+      seed: 77
+    })
+    const stats = computeStats(runMonteCarlo(plan))
+    const keys = ['p10', 'p25', 'p50', 'p75', 'p90'] as const
+
+    expect(stats.percentileRuns.p50).toBe(stats.medianRun)
+
+    for (let i = 0; i < keys.length; i++) {
+      const r = stats.percentileRuns[keys[i]]!
+      expect(r).not.toBeNull()
+      if (i > 0) {
+        const prev = stats.percentileRuns[keys[i - 1]]!
+        expect(compareSimRuns(prev, r)).toBeLessThanOrEqual(0)
+      }
+      for (let t = 0; t < r.years.length; t++) {
+        const y = r.years[t]
+        expect(y.grossSale).toBeCloseTo(y.withdrawal + y.taxPaid, 6)
+        if (t > 0) {
+          expect(y.startPortfolio).toBeCloseTo(r.years[t - 1].endPortfolio, 6)
+        }
+      }
+    }
   })
 })

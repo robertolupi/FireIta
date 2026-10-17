@@ -45,7 +45,7 @@
       <ResultsSummary {stats} />
       <FanChart bands={stats.bands} plan={planStore.plan} valueMode={planStore.valueMode} />
       {#if stats.medianRun}
-        <YearTable years={stats.medianRun.years} />
+        <YearTable percentileRuns={stats.percentileRuns} years={stats.medianRun.years} />
       {/if}
     </div>
   </div>

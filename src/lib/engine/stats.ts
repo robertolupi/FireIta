@@ -20,6 +20,10 @@ export interface YearBand {
   p90: number
 }
 
+export type PercentileKey = 'p10' | 'p25' | 'p50' | 'p75' | 'p90'
+
+export type PercentileRuns = Record<PercentileKey, SimResult | null>
+
 export interface SimStats {
   runs: number
   /** Quota di run in cui il patrimonio non si esaurisce (depletionYear === null) */
@@ -36,6 +40,35 @@ export interface SimStats {
   meanShortfallYears: number
   bands: YearBand[]
   medianRun: SimResult | null
+  percentileRuns: PercentileRuns
+}
+
+/**
+ * Restituisce il numero di anni in cui il portafoglio resta strettamente positivo.
+ */
+function survivalYears(run: SimResult): number {
+  const idx = run.years.findIndex((y) => y.endPortfolio <= 0)
+  return idx === -1 ? run.years.length : idx
+}
+
+/**
+ * Comparatore che distingue le run esaurite in base a quanto presto finiscono i soldi,
+ * e le run sopravvissute in base al patrimonio finale.
+ */
+export function compareSimRuns(a: SimResult, b: SimResult): number {
+  const survA = survivalYears(a)
+  const survB = survivalYears(b)
+  if (survA !== survB) return survA - survB
+  return a.finalPortfolio - b.finalPortfolio
+}
+
+function pickRunAtQuantile(sortedRuns: SimResult[], q: number): SimResult | null {
+  if (sortedRuns.length === 0) return null
+  const idx = Math.min(
+    sortedRuns.length - 1,
+    Math.max(0, Math.round(q * (sortedRuns.length - 1)))
+  )
+  return sortedRuns[idx]
 }
 
 export function computeStats(results: SimResult[]): SimStats {
@@ -51,7 +84,14 @@ export function computeStats(results: SimResult[]): SimStats {
       meanFirstShortfallAge: null,
       meanShortfallYears: 0,
       bands: [],
-      medianRun: null
+      medianRun: null,
+      percentileRuns: {
+        p10: null,
+        p25: null,
+        p50: null,
+        p75: null,
+        p90: null
+      }
     }
   }
 
@@ -97,8 +137,15 @@ export function computeStats(results: SimResult[]): SimStats {
     })
   }
 
-  const sortedByFinal = [...results].sort((a, b) => a.finalPortfolio - b.finalPortfolio)
-  const medianRun = sortedByFinal[Math.floor((sortedByFinal.length - 1) / 2)]
+  const sortedByOutcome = [...results].sort(compareSimRuns)
+  const percentileRuns: PercentileRuns = {
+    p10: pickRunAtQuantile(sortedByOutcome, 0.1),
+    p25: pickRunAtQuantile(sortedByOutcome, 0.25),
+    p50: pickRunAtQuantile(sortedByOutcome, 0.5),
+    p75: pickRunAtQuantile(sortedByOutcome, 0.75),
+    p90: pickRunAtQuantile(sortedByOutcome, 0.9)
+  }
+  const medianRun = percentileRuns.p50
 
   return {
     runs: results.length,
@@ -120,6 +167,7 @@ export function computeStats(results: SimResult[]): SimStats {
     meanFirstShortfallAge,
     meanShortfallYears,
     bands,
-    medianRun
+    medianRun,
+    percentileRuns
   }
 }

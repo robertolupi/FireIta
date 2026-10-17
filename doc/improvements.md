@@ -25,7 +25,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Arricchisce l'SVG del grafico a bande con cursore interattivo (*hover crosshair*), tooltip dettagliato dei percentili per età, linee verticali per pensionamento ed eventi di vita, e curva del Target FIRE.
   - **File principali**: `src/lib/components/FanChart.svelte`, `src/App.svelte`.
 
-- [ ] **[03 — Selettore di Percentile/Scenario per la Tabella Annuale e Distinta di Cash-Flow](./03-ui-yeartable-percentiles-cashflow.md)**
+- [x] **[03 — Selettore di Percentile/Scenario per la Tabella Annuale e Distinta di Cash-Flow](./03-ui-yeartable-percentiles-cashflow.md)**
   - **Complessità**: 🟡 Media
   - **Sintesi**: Permette di ispezionare in tabella non solo il run mediano (`p50`), ma anche gli scenari avversi (`p10`, `p25`, peggior run o primo fallimento) e di visualizzare la scomposizione dei flussi di cassa annuali.
   - **File principali**: `src/lib/engine/stats.ts`, `src/lib/components/YearTable.svelte`, `src/App.svelte`.
