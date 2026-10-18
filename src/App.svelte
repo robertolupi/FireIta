@@ -68,17 +68,19 @@
         </div>
       </div>
 
-      <ResultsSummary {stats} {baselineStats} />
-      <FanChart
-        bands={stats.bands}
-        baselineBands={baselineStats?.bands ?? null}
-        plan={planStore.committedPlan}
-        valueMode={planStore.valueMode}
-      />
-      <SensitivityMatrix />
-      {#if stats.medianRun}
-        <YearTable percentileRuns={stats.percentileRuns} years={stats.medianRun.years} />
-      {/if}
+      <div class="results-content" class:outdated={planStore.isPending} aria-busy={planStore.isPending}>
+        <ResultsSummary {stats} {baselineStats} />
+        <FanChart
+          bands={stats.bands}
+          baselineBands={baselineStats?.bands ?? null}
+          plan={planStore.committedPlan}
+          valueMode={planStore.valueMode}
+        />
+        <SensitivityMatrix />
+        {#if stats.medianRun}
+          <YearTable percentileRuns={stats.percentileRuns} years={stats.medianRun.years} />
+        {/if}
+      </div>
     </div>
   </div>
 </main>
