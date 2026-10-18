@@ -69,7 +69,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Modella portafogli multi-asset (Azioni, Obbligazioni, Liquidità) con correlazione, supporto a *Glidepath / Bond Tent* intorno alla data di ritiro e ribilanciamento fiscalmente efficiente per il regime amministrato italiano.
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/montecarlo.ts`, `src/lib/engine/projection.ts`, `src/lib/components/PlanForm.svelte`.
 
-- [ ] **[11 — Ordine dei Flussi di Cassa Infra-Annuali e Cuscinetto di Liquidità (Cash Buffer)](./11-engine-cashflow-timing-buffer.md)**
+- [x] **[11 — Ordine dei Flussi di Cassa Infra-Annuali e Cuscinetto di Liquidità (Cash Buffer)](./11-engine-cashflow-timing-buffer.md)**
   - **Complessità**: 🟡 Media
   - **Sintesi**: Affina il timing dei prelievi rispetto ai rendimenti di mercato (inizio anno / mid-year) e introduce un *Cash Buffer* (1–3 anni di spese in liquidità) da utilizzare negli anni di mercato orso per evitare di vendere azioni in drawdown.
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/projection.ts`, `src/lib/components/PlanForm.svelte`.

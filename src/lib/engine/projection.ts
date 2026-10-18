@@ -1,4 +1,4 @@
-import type { LifeEvent, Plan, YearState } from './types'
+import type { CashflowTiming, LifeEvent, Plan, YearState } from './types'
 import {
   applyStampDuty,
   effectiveCapitalGainsTaxRate,
@@ -67,6 +67,8 @@ function computeRecurringIncome(plan: Plan, year: number, calendarYear: number):
 export function runProjection(plan: Plan, returns: number[]): YearState[] {
   const horizon = horizonYears(plan)
   const stop = effectiveStopYear(plan)
+  const timing: CashflowTiming = plan.cashflowTiming ?? 'legacy'
+  const cb = plan.cashBuffer?.enabled ? plan.cashBuffer : undefined
   const effectiveTaxRate = effectiveCapitalGainsTaxRate(plan.taxRate, plan.whitelistAllocation ?? 0)
   const expenseChanges = plan.events
     .filter((e): e is Extract<LifeEvent, { kind: 'setExpenses' }> => e.kind === 'setExpenses')
@@ -74,6 +76,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
 
   let portfolio = plan.initialPortfolio
   let costBasis = Math.min(plan.initialCostBasis, plan.initialPortfolio)
+  let cashBuffer = 0
   let expensesBase = plan.annualExpenses
   let retirementBase = 0
   let currentWithdrawal = 0
@@ -88,7 +91,6 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
   const states: YearState[] = []
 
   for (let year = 0; year < horizon; year++) {
-    const startPortfolio = portfolio
     const age = currentAge(plan) + year
     const calendarYear = plan.startYear + year
 
@@ -106,6 +108,16 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
         taxPaid: 0,
         stampDutyPaid: 0,
         ...(pf ? { pensionFundBalance: pfBalance } : {}),
+        ...(cb
+          ? {
+              cashBufferStart: 0,
+              cashBufferEnd: 0,
+              bufferWithdrawal: 0,
+              bufferRefill: 0,
+              cashBufferBalance: 0,
+              cashBufferMovement: 0
+            }
+          : {}),
         returnRate: returns[year] ?? 0,
         investmentReturn: 0,
         startPortfolio: 0,
@@ -127,11 +139,30 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
     const returnRate = returns[year] ?? 0
     const expenses = expensesBase * Math.pow(1 + plan.inflationRate, year)
 
+    // Inizializzazione del Cash Buffer al primo anno di pensionamento (scorporo proporzionale)
+    if (cb && year === stop && cashBuffer === 0 && portfolio > 0) {
+      const targetInitBuffer = Math.max(0, cb.yearsOfExpenses) * expenses
+      const initAllocation = Math.min(portfolio, targetInitBuffer)
+      if (initAllocation > 0) {
+        const remainingRatio = (portfolio - initAllocation) / portfolio
+        portfolio -= initAllocation
+        costBasis *= remainingRatio
+        cashBuffer = initAllocation
+      }
+    }
+
+    const cashBufferStart = cashBuffer
+    const startPortfolio = portfolio + cashBuffer
+
     let contribution = 0
     let withdrawal = 0
     let grossSale = 0
     let taxPaid = 0
+    let bufferWithdrawal = 0
+    let bufferRefill = 0
     let expensesNotCovered = false
+
+    const isMarketStressed = Boolean(cb && returnRate < (cb.drawdownThreshold ?? 0))
 
     // Gestione Fondo Pensione Complementare / RITA
     let pfNetOutflow = 0
@@ -178,7 +209,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
     const sell = (netNeeded: number): number => {
       if (netNeeded <= 0) return 0
       if (portfolio <= 0) {
-        depleted = true
+        if (cashBuffer <= 0) depleted = true
         return 0
       }
       const result = sellWithTax(portfolio, costBasis, netNeeded, effectiveTaxRate)
@@ -187,30 +218,47 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
       withdrawal += result.netProceeds
       portfolio = result.remainingPortfolio
       costBasis = result.remainingCostBasis
-      if (result.depleted) depleted = true
+      if (result.depleted && cashBuffer <= 0) depleted = true
       return result.netProceeds
     }
 
-    if (!retired) {
-      const net = income - expenses - pfNetOutflow
-      contribution = net
-      if (net > 0) {
-        portfolio += net
-        costBasis += net
-      } else if (net < 0) {
-        if (sell(-net) < -net - 1e-9) expensesNotCovered = true
+    const spendNeed = (netNeeded: number): number => {
+      if (netNeeded <= 0) return 0
+      let rem = netNeeded
+      let obtained = 0
+
+      if (cb && retired && isMarketStressed && cashBuffer > 0) {
+        const fromBuf = Math.min(cashBuffer, rem)
+        cashBuffer -= fromBuf
+        bufferWithdrawal += fromBuf
+        withdrawal += fromBuf
+        obtained += fromBuf
+        rem -= fromBuf
       }
-      for (const event of plan.events) {
-        if (event.kind === 'oneTimeExpense' && event.atYear - plan.startYear === year) {
-          if (sell(event.amount) < event.amount - 1e-9) expensesNotCovered = true
-        }
+
+      if (rem > 0 && portfolio > 0) {
+        const fromPort = sell(rem)
+        obtained += fromPort
+        rem = Math.max(0, rem - fromPort)
       }
+
+      if (cb && retired && rem > 1e-9 && cashBuffer > 0) {
+        const fromBuf = Math.min(cashBuffer, rem)
+        cashBuffer -= fromBuf
+        bufferWithdrawal += fromBuf
+        withdrawal += fromBuf
+        obtained += fromBuf
+        rem -= fromBuf
+      }
+
+      if (rem > 1e-9 && portfolio <= 1e-9 && cashBuffer <= 1e-9) {
+        depleted = true
+      }
+
+      return obtained
     }
 
-    const investmentReturn = portfolio * returnRate
-    portfolio = Math.max(0, portfolio + investmentReturn)
-
-    if (retired) {
+    const executeRetirementCashflow = () => {
       let oneTimeExpenses = 0
       for (const event of plan.events) {
         if (event.kind === 'oneTimeExpense' && event.atYear - plan.startYear === year) {
@@ -220,6 +268,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
 
       const totalNeeded = expenses + oneTimeExpenses
       const strategy = plan.withdrawalStrategy
+      const totalCurrentWealth = portfolio + cashBuffer
 
       if (strategy.type === 'percentCap') {
         if (year === stop) retirementBase = startPortfolio * strategy.rate
@@ -231,7 +280,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           costBasis += surplus
         } else {
           const netNeeded = totalNeeded - income
-          const obtained = sell(Math.min(netNeeded, cap))
+          const obtained = spendNeed(Math.min(netNeeded, cap))
           if (income + obtained < totalNeeded - 1e-9) expensesNotCovered = true
         }
       } else if (strategy.type === 'spendExpenses') {
@@ -242,7 +291,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           costBasis += surplus
         } else {
           const netNeeded = totalNeeded - income
-          const obtained = sell(netNeeded)
+          const obtained = spendNeed(netNeeded)
           if (income + obtained < totalNeeded - 1e-9) expensesNotCovered = true
         }
       } else if (strategy.type === 'constantDollar') {
@@ -261,8 +310,8 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           const remIncome = Math.max(0, income - incomeForBase)
           const netTarget = Math.max(0, targetWithdrawal - income)
           const netOneTime = Math.max(0, oneTimeExpenses - remIncome)
-          const obtained = sell(netTarget)
-          const oneTimeObtained = netOneTime > 0 ? sell(netOneTime) : 0
+          const obtained = spendNeed(netTarget)
+          const oneTimeObtained = netOneTime > 0 ? spendNeed(netOneTime) : 0
           if (
             incomeForBase + obtained < expenses - 1e-9 ||
             remIncome + oneTimeObtained < oneTimeExpenses - 1e-9
@@ -282,7 +331,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           strategy.minRate ?? 0,
           strategy.maxRate ?? 1
         )
-        const targetWithdrawal = Math.max(portfolio * vpwRate, expenses)
+        const targetWithdrawal = Math.max(totalCurrentWealth * vpwRate, expenses)
         if (income > targetWithdrawal + oneTimeExpenses) {
           const surplus = income - totalNeeded
           contribution = surplus
@@ -293,8 +342,8 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           const remIncome = Math.max(0, income - incomeForBase)
           const netTarget = Math.max(0, targetWithdrawal - income)
           const netOneTime = Math.max(0, oneTimeExpenses - remIncome)
-          const obtained = sell(targetWithdrawal > 0 ? netTarget : 0)
-          const oneTimeObtained = netOneTime > 0 ? sell(netOneTime) : 0
+          const obtained = spendNeed(targetWithdrawal > 0 ? netTarget : 0)
+          const oneTimeObtained = netOneTime > 0 ? spendNeed(netOneTime) : 0
           if (
             incomeForBase + obtained < expenses - 1e-9 ||
             remIncome + oneTimeObtained < oneTimeExpenses - 1e-9
@@ -306,7 +355,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
       } else if (strategy.type === 'guardrails') {
         if (year === stop) {
           currentWithdrawal = Math.max(strategy.initialRate * startPortfolio, expenses)
-        } else if (portfolio > 0) {
+        } else if (totalCurrentWealth > 0) {
           const prevReturn = returns[year - 1] ?? 0
           const skipInflation =
             Boolean(strategy.skipInflationAfterNegativeReturn) &&
@@ -315,7 +364,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           if (!skipInflation) {
             currentWithdrawal *= 1 + plan.inflationRate
           }
-          const effectiveRate = currentWithdrawal / portfolio
+          const effectiveRate = currentWithdrawal / totalCurrentWealth
           if (effectiveRate < strategy.lowerGuardrail) {
             currentWithdrawal *= 1 + strategy.increasePct
           } else if (effectiveRate > strategy.upperGuardrail) {
@@ -333,10 +382,10 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           const remIncome = Math.max(0, income - incomeForBase)
           const netTarget = Math.max(0, currentWithdrawal - income)
           const netOneTime = Math.max(0, oneTimeExpenses - remIncome)
-          const obtained = sell(netTarget)
+          const obtained = spendNeed(netTarget)
           // le spese una tantum sono vendite extra sopra il prelievo guardrails:
           // non modificano currentWithdrawal né i futuri aggiustamenti
-          const oneTimeObtained = netOneTime > 0 ? sell(netOneTime) : 0
+          const oneTimeObtained = netOneTime > 0 ? spendNeed(netOneTime) : 0
           if (
             incomeForBase + obtained < expenses - 1e-9 ||
             remIncome + oneTimeObtained < oneTimeExpenses - 1e-9
@@ -344,6 +393,76 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
             expensesNotCovered = true
             depleted = true
           }
+        }
+      }
+    }
+
+    let investmentReturn = 0
+
+    if (!retired) {
+      const investedBeforeCf = portfolio
+      const net = income - expenses - pfNetOutflow
+      contribution = net
+      if (net > 0) {
+        portfolio += net
+        costBasis += net
+      } else if (net < 0) {
+        if (sell(-net) < -net - 1e-9) expensesNotCovered = true
+      }
+      for (const event of plan.events) {
+        if (event.kind === 'oneTimeExpense' && event.atYear - plan.startYear === year) {
+          if (sell(event.amount) < event.amount - 1e-9) expensesNotCovered = true
+        }
+      }
+
+      if (timing === 'midYear') {
+        const effectiveBase = Math.max(
+          0,
+          investedBeforeCf + 0.5 * Math.max(0, contribution) - 0.5 * grossSale
+        )
+        investmentReturn = effectiveBase * returnRate
+      } else {
+        investmentReturn = portfolio * returnRate
+      }
+      portfolio = Math.max(0, portfolio + investmentReturn)
+    } else if (timing === 'legacy') {
+      investmentReturn = portfolio * returnRate
+      portfolio = Math.max(0, portfolio + investmentReturn)
+      executeRetirementCashflow()
+    } else if (timing === 'startOfYear') {
+      executeRetirementCashflow()
+      investmentReturn = portfolio * returnRate
+      portfolio = Math.max(0, portfolio + investmentReturn)
+    } else {
+      // timing === 'midYear'
+      const investedBeforeCf = portfolio
+      executeRetirementCashflow()
+      const effectiveBase = Math.max(
+        0,
+        investedBeforeCf + 0.5 * Math.max(0, contribution) - 0.5 * grossSale
+      )
+      investmentReturn = effectiveBase * returnRate
+      portfolio = Math.max(0, portfolio + investmentReturn)
+    }
+
+    // Rendimento e ricostituzione (Refill) del Cash Buffer in fase di pensionamento
+    if (cb && retired) {
+      if (cashBuffer > 0 && cb.cashReturnRate) {
+        cashBuffer = Math.max(0, cashBuffer * (1 + cb.cashReturnRate))
+      }
+      const targetBuffer = Math.max(0, cb.yearsOfExpenses) * expenses
+      if (!isMarketStressed && cashBuffer < targetBuffer && portfolio > 0) {
+        const deficit = targetBuffer - cashBuffer
+        const excessReturn = Math.max(0, investmentReturn - withdrawal)
+        const refillTarget = Math.min(deficit, excessReturn)
+        if (refillTarget > 0) {
+          const refillSale = sellWithTax(portfolio, costBasis, refillTarget, effectiveTaxRate)
+          grossSale += refillSale.grossSale
+          taxPaid += refillSale.tax
+          portfolio = refillSale.remainingPortfolio
+          costBasis = refillSale.remainingCostBasis
+          bufferRefill = refillSale.netProceeds
+          cashBuffer += refillSale.netProceeds
         }
       }
     }
@@ -361,6 +480,13 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
     if (portfolio <= 1e-9) {
       portfolio = 0
       costBasis = 0
+    }
+    if (cashBuffer <= 1e-9) {
+      cashBuffer = 0
+    }
+
+    const endPortfolio = portfolio + cashBuffer
+    if (endPortfolio <= 1e-9) {
       depleted = true
     }
 
@@ -377,10 +503,20 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
       taxPaid,
       stampDutyPaid,
       ...(pf ? { pensionFundBalance: pfBalance } : {}),
+      ...(cb
+        ? {
+            cashBufferStart,
+            cashBufferEnd: cashBuffer,
+            bufferWithdrawal,
+            bufferRefill,
+            cashBufferBalance: cashBuffer,
+            cashBufferMovement: bufferRefill - bufferWithdrawal
+          }
+        : {}),
       returnRate,
       investmentReturn,
       startPortfolio,
-      endPortfolio: portfolio,
+      endPortfolio,
       endCostBasis: costBasis,
       expensesNotCovered,
       depleted

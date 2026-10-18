@@ -42,6 +42,18 @@ export function deflateYearState(
     ...(state.pensionFundBalance !== undefined
       ? { pensionFundBalance: state.pensionFundBalance / d }
       : {}),
+    ...(state.cashBufferStart !== undefined ? { cashBufferStart: state.cashBufferStart / d } : {}),
+    ...(state.cashBufferEnd !== undefined ? { cashBufferEnd: state.cashBufferEnd / d } : {}),
+    ...(state.bufferWithdrawal !== undefined
+      ? { bufferWithdrawal: state.bufferWithdrawal / d }
+      : {}),
+    ...(state.bufferRefill !== undefined ? { bufferRefill: state.bufferRefill / d } : {}),
+    ...(state.cashBufferBalance !== undefined
+      ? { cashBufferBalance: state.cashBufferBalance / d }
+      : {}),
+    ...(state.cashBufferMovement !== undefined
+      ? { cashBufferMovement: state.cashBufferMovement / d }
+      : {}),
     investmentReturn: state.investmentReturn / d,
     startPortfolio: state.startPortfolio / d,
     endPortfolio: state.endPortfolio / d,

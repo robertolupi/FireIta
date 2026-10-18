@@ -1,4 +1,12 @@
-import type { LifeEvent, PensionFundConfig, Plan, WithdrawalStrategy, YearState } from './engine/types'
+import type {
+  CashBufferConfig,
+  CashflowTiming,
+  LifeEvent,
+  PensionFundConfig,
+  Plan,
+  WithdrawalStrategy,
+  YearState
+} from './engine/types'
 
 export const STORAGE_KEY = 'fireita.plan.v1'
 export const BASELINE_STORAGE_KEY = 'fireita.baseline.v1'
@@ -165,6 +173,24 @@ function sanitizePensionFund(raw: unknown): PensionFundConfig | undefined {
   return config
 }
 
+function sanitizeCashflowTiming(raw: unknown): CashflowTiming | undefined {
+  if (raw === 'legacy' || raw === 'startOfYear' || raw === 'midYear') {
+    return raw
+  }
+  return undefined
+}
+
+function sanitizeCashBuffer(raw: unknown): CashBufferConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const cb = raw as Record<string, unknown>
+  return {
+    enabled: Boolean(cb.enabled),
+    yearsOfExpenses: finiteNumber(cb.yearsOfExpenses, 2, 0, 10),
+    cashReturnRate: finiteNumber(cb.cashReturnRate, 0.02, -0.5, 1),
+    drawdownThreshold: finiteNumber(cb.drawdownThreshold, 0, -1, 1)
+  }
+}
+
 export function sanitizePlan(raw: unknown): Plan {
   const def = createDefaultPlan()
   if (!raw || typeof raw !== 'object') return def
@@ -222,6 +248,16 @@ export function sanitizePlan(raw: unknown): Plan {
     sanitized.pensionFund = pensionFund
   }
 
+  const cashflowTiming = sanitizeCashflowTiming(obj.cashflowTiming)
+  if (cashflowTiming !== undefined) {
+    sanitized.cashflowTiming = cashflowTiming
+  }
+
+  const cashBuffer = sanitizeCashBuffer(obj.cashBuffer)
+  if (cashBuffer !== undefined) {
+    sanitized.cashBuffer = cashBuffer
+  }
+
   return sanitized
 }
 
@@ -240,6 +276,7 @@ export function decodePlanFromUrlParam(encoded: string): Plan | null {
 }
 
 export function exportYearsToCsv(years: YearState[]): string {
+  const hasCashBuffer = years.some((y) => y.cashBufferEnd !== undefined)
   const headers = [
     'Anno',
     'Eta',
@@ -255,6 +292,7 @@ export function exportYearsToCsv(years: YearState[]): string {
     'RendimentoEur',
     'PatrimonioFine',
     'CostoFiscaleFine',
+    ...(hasCashBuffer ? ['CashBufferFine', 'PrelievoBuffer', 'RefillBuffer'] : []),
     'SpeseNonCoperte',
     'Esaurito'
   ]
@@ -274,6 +312,13 @@ export function exportYearsToCsv(years: YearState[]): string {
       y.investmentReturn.toFixed(2),
       y.endPortfolio.toFixed(2),
       y.endCostBasis.toFixed(2),
+      ...(hasCashBuffer
+        ? [
+            (y.cashBufferEnd ?? 0).toFixed(2),
+            (y.bufferWithdrawal ?? 0).toFixed(2),
+            (y.bufferRefill ?? 0).toFixed(2)
+          ]
+        : []),
       y.expensesNotCovered ? '1' : '0',
       y.depleted ? '1' : '0'
     ].join(',')

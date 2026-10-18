@@ -56,6 +56,18 @@ export interface PensionFundConfig {
   ritaEndAge: number
 }
 
+export type CashflowTiming = 'legacy' | 'startOfYear' | 'midYear'
+
+export interface CashBufferConfig {
+  enabled: boolean
+  /** Numero di anni di spese correnti da mantenere nel buffer (es. 2.0) */
+  yearsOfExpenses: number
+  /** Rendimento annuo netto della liquidità nel buffer (es. 0.02) */
+  cashReturnRate: number
+  /** Soglia di rendimento azionario sotto la quale si attinge dal buffer (default: 0) */
+  drawdownThreshold: number
+}
+
 export interface Plan {
   startYear: number
   birthYear: number
@@ -78,6 +90,10 @@ export interface Plan {
   whitelistAllocation?: number
   /** Configurazione opzionale Fondo Pensione Complementare / RITA */
   pensionFund?: PensionFundConfig
+  /** Convenzione temporale dei flussi di cassa infra-annuali (default 'legacy') */
+  cashflowTiming?: CashflowTiming
+  /** Configurazione opzionale Cuscinetto di Liquidità (Cash Buffer anti-SRR) */
+  cashBuffer?: CashBufferConfig
   withdrawalStrategy: WithdrawalStrategy
   events: LifeEvent[]
 }
@@ -97,6 +113,18 @@ export interface YearState {
   stampDutyPaid?: number
   /** Saldo residuo del fondo pensione a fine anno (se pensionFund è attivo) */
   pensionFundBalance?: number
+  /** Saldo iniziale del Cash Buffer nell'anno (se cashBuffer è attivo) */
+  cashBufferStart?: number
+  /** Saldo finale del Cash Buffer nell'anno (se cashBuffer è attivo) */
+  cashBufferEnd?: number
+  /** Prelievo effettuato dal Cash Buffer nell'anno per coprire spese in mercato negativo */
+  bufferWithdrawal?: number
+  /** Ricostituzione del Cash Buffer nell'anno da surplus di rendimento */
+  bufferRefill?: number
+  /** Alias saldo finale Cash Buffer (= cashBufferEnd) */
+  cashBufferBalance?: number
+  /** Movimento netto sul Cash Buffer nell'anno (= bufferRefill - bufferWithdrawal) */
+  cashBufferMovement?: number
   returnRate: number
   investmentReturn: number
   startPortfolio: number

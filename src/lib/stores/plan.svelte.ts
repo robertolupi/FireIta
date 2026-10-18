@@ -82,6 +82,12 @@ function createPlanStore() {
     if (clean.whitelistAllocation === undefined) {
       plan.whitelistAllocation = undefined
     }
+    if (clean.cashflowTiming === undefined) {
+      plan.cashflowTiming = undefined
+    }
+    if (clean.cashBuffer === undefined) {
+      plan.cashBuffer = undefined
+    }
   }
 
   function pinBaseline() {

@@ -25,6 +25,7 @@
   let activeRun = $derived(percentileRuns ? percentileRuns[selectedPercentile] : null)
   let years = $derived<YearState[]>(activeRun?.years ?? fallbackYears)
   let hasPensionFund = $derived(years.some((y) => y.pensionFundBalance !== undefined))
+  let hasCashBuffer = $derived(years.some((y) => y.cashBufferEnd !== undefined))
   let unitSuffix = $derived(planStore.valueMode === 'real' ? '€ (reali)' : '€ (nom.)')
 
   let firstDepletionIndex = $derived(years.findIndex((y) => y.depleted || y.endPortfolio <= 0))
@@ -122,6 +123,11 @@
           {#if hasPensionFund}
             <th>Fondo Pensione {unitSuffix}</th>
           {/if}
+          {#if hasCashBuffer}
+            <th title="Saldo di fine anno del Cuscinetto di Liquidità (compreso nel patrimonio fine anno)">
+              Cash Buffer {unitSuffix}
+            </th>
+          {/if}
           <th>Patrimonio fine anno {unitSuffix}</th>
           {#if showDetailed}
             <th title="Prezzo Medio di Carico residuo esente da imposta sul capital gain">
@@ -212,6 +218,27 @@
             {#if hasPensionFund}
               <td>{formatEur(y.pensionFundBalance ?? 0)}</td>
             {/if}
+            {#if hasCashBuffer}
+              <td
+                title={[
+                  y.bufferWithdrawal && y.bufferWithdrawal > 0
+                    ? `prelievo da buffer: -${formatEur(y.bufferWithdrawal)}`
+                    : '',
+                  y.bufferRefill && y.bufferRefill > 0
+                    ? `ricarica buffer: +${formatEur(y.bufferRefill)}`
+                    : ''
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || undefined}
+              >
+                <span>{formatEur(y.cashBufferEnd ?? 0)}</span>
+                {#if showDetailed && y.bufferWithdrawal && y.bufferWithdrawal > 0}
+                  <small class="sub-pct">(-{formatEur(y.bufferWithdrawal)})</small>
+                {:else if showDetailed && y.bufferRefill && y.bufferRefill > 0}
+                  <small class="sub-pct">(+{formatEur(y.bufferRefill)})</small>
+                {/if}
+              </td>
+            {/if}
             <td>
               {formatEur(y.endPortfolio)}
               {#if i === firstDepletionIndex}
@@ -250,6 +277,9 @@
             <td><strong>{formatEur(totals.investmentReturn)}</strong></td>
             {#if hasPensionFund}
               <td><strong>{formatEur(lastYear?.pensionFundBalance ?? 0)}</strong></td>
+            {/if}
+            {#if hasCashBuffer}
+              <td><strong>{formatEur(lastYear?.cashBufferEnd ?? 0)}</strong></td>
             {/if}
             <td><strong>{formatEur(lastYear?.endPortfolio ?? 0)}</strong></td>
             {#if showDetailed}

@@ -44,6 +44,20 @@
     }
   }
 
+  function toggleCashBuffer(e: Event) {
+    const checked = (e.currentTarget as HTMLInputElement).checked
+    if (checked) {
+      plan.cashBuffer = {
+        enabled: true,
+        yearsOfExpenses: plan.cashBuffer?.yearsOfExpenses ?? 2,
+        cashReturnRate: plan.cashBuffer?.cashReturnRate ?? 0.02,
+        drawdownThreshold: plan.cashBuffer?.drawdownThreshold ?? 0
+      }
+    } else if (plan.cashBuffer) {
+      plan.cashBuffer.enabled = false
+    }
+  }
+
   let ws = $derived(plan.withdrawalStrategy)
 
   function setStrategy(type: string) {
@@ -354,6 +368,75 @@
       <label>
         Età termine RITA
         <input type="number" bind:value={plan.pensionFund.ritaEndAge} min="0" step="1" />
+      </label>
+    {/if}
+  </fieldset>
+
+  <fieldset>
+    <legend>Timing flussi e Cash Buffer</legend>
+    <label>
+      Timing dei flussi infra-annuali
+      <select
+        value={plan.cashflowTiming ?? 'legacy'}
+        onchange={(e) => {
+          const val = (e.currentTarget as HTMLSelectElement).value
+          plan.cashflowTiming =
+            val === 'startOfYear' || val === 'midYear' ? val : 'legacy'
+        }}
+      >
+        <option value="legacy">Fine anno (Legacy)</option>
+        <option value="midYear">Metà anno (Flussi mensili uniformi)</option>
+        <option value="startOfYear">Inizio anno (Conservativo)</option>
+      </select>
+    </label>
+    <label>
+      <span>
+        <input
+          type="checkbox"
+          checked={Boolean(plan.cashBuffer?.enabled)}
+          onchange={toggleCashBuffer}
+        />
+        Attiva Cuscinetto di Liquidità (Cash Buffer)
+      </span>
+    </label>
+    {#if plan.cashBuffer?.enabled}
+      <label>
+        Annualità di spese nel buffer
+        <input
+          type="number"
+          bind:value={plan.cashBuffer.yearsOfExpenses}
+          min="0.5"
+          max="10"
+          step="0.5"
+        />
+      </label>
+      <label>
+        Rendimento netto liquidità (%/anno)
+        <input
+          type="number"
+          value={Number((plan.cashBuffer.cashReturnRate * 100).toFixed(2))}
+          oninput={(e) => {
+            if (plan.cashBuffer) {
+              plan.cashBuffer.cashReturnRate =
+                Number((e.currentTarget as HTMLInputElement).value) / 100
+            }
+          }}
+          step="0.25"
+        />
+      </label>
+      <label>
+        Soglia attivazione rendimento azionario (%)
+        <input
+          type="number"
+          value={Number((plan.cashBuffer.drawdownThreshold * 100).toFixed(2))}
+          oninput={(e) => {
+            if (plan.cashBuffer) {
+              plan.cashBuffer.drawdownThreshold =
+                Number((e.currentTarget as HTMLInputElement).value) / 100
+            }
+          }}
+          step="1"
+        />
       </label>
     {/if}
   </fieldset>
