@@ -14,6 +14,7 @@
 
   $effect(() => {
     const snapshot = JSON.stringify(planStore.plan)
+    planStore.notifyPlanChanged(snapshot)
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem(STORAGE_KEY, snapshot)
@@ -39,12 +40,20 @@
     </div>
     <div class="column wide">
       <div class="results-toolbar">
+        {#if planStore.isPending}
+          <div class="pending-banner" role="status" aria-live="polite">
+            <span>Modifiche in attesa — ricalcolo tra <strong>{planStore.remainingSeconds}s</strong>…</span>
+            <button type="button" class="btn-recalc-now" onclick={() => planStore.commitNow()}>
+              Ricalcola ora
+            </button>
+          </div>
+        {/if}
         <div class="value-mode-toggle" role="group" aria-label="Modalità valuta">
           <button
             type="button"
             class:active={planStore.valueMode === 'real'}
             onclick={() => (planStore.valueMode = 'real')}
-            title="Importi scontati per l'inflazione al potere d'acquisto di {planStore.plan.startYear}"
+            title="Importi scontati per l'inflazione al potere d'acquisto di {planStore.committedPlan.startYear}"
           >
             Valori Reali (Oggi €)
           </button>
@@ -63,7 +72,7 @@
       <FanChart
         bands={stats.bands}
         baselineBands={baselineStats?.bands ?? null}
-        plan={planStore.plan}
+        plan={planStore.committedPlan}
         valueMode={planStore.valueMode}
       />
       <SensitivityMatrix />

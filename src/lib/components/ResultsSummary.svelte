@@ -98,7 +98,7 @@
   <p class="derived value-mode-note">
     Patrimonio finale espresso in €
     {planStore.valueMode === 'real'
-      ? `del ${planStore.plan.startYear} (potere d'acquisto costante)`
+      ? `del ${planStore.committedPlan.startYear} (potere d'acquisto costante)`
       : 'nominali futuri'}
   </p>
 

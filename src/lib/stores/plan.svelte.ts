@@ -42,15 +42,26 @@ function loadInitialBaseline(): Plan | null {
   return null
 }
 
+const DEBOUNCE_MS = 3000
+
 function createPlanStore() {
-  const plan = $state<Plan>(loadInitialPlan())
+  const initial = loadInitialPlan()
+  const plan = $state<Plan>(initial)
+  let committedPlan = $state<Plan>(structuredClone(initial))
+  let lastCommittedJson = JSON.stringify(initial)
+
+  let isPending = $state(false)
+  let remainingMs = $state(0)
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  let countdownInterval: ReturnType<typeof setInterval> | null = null
+
   let baselinePlan = $state<Plan | null>(loadInitialBaseline())
   let valueMode = $state<ValueMode>('real')
 
-  const results: SimResult[] = $derived(runMonteCarlo(plan))
+  const results: SimResult[] = $derived(runMonteCarlo(committedPlan))
   const rawStats: SimStats = $derived(computeStats(results))
   const displayStats: SimStats = $derived(
-    transformSimStats(rawStats, plan.startYear, plan.inflationRate, valueMode)
+    transformSimStats(rawStats, committedPlan.startYear, committedPlan.inflationRate, valueMode)
   )
 
   const baselineResults: SimResult[] | null = $derived(
@@ -70,6 +81,45 @@ function createPlanStore() {
       : null
   )
 
+  function clearTimers() {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer)
+      debounceTimer = null
+    }
+    if (countdownInterval) {
+      clearInterval(countdownInterval)
+      countdownInterval = null
+    }
+  }
+
+  function commitNow() {
+    clearTimers()
+    const snap = structuredClone($state.snapshot(plan))
+    lastCommittedJson = JSON.stringify(snap)
+    committedPlan = snap
+    isPending = false
+    remainingMs = 0
+  }
+
+  function notifyPlanChanged(snapshotJson: string) {
+    if (snapshotJson === lastCommittedJson) {
+      clearTimers()
+      isPending = false
+      remainingMs = 0
+      return
+    }
+    clearTimers()
+    isPending = true
+    remainingMs = DEBOUNCE_MS
+    const deadline = Date.now() + DEBOUNCE_MS
+    countdownInterval = setInterval(() => {
+      remainingMs = Math.max(0, deadline - Date.now())
+    }, 100)
+    debounceTimer = setTimeout(() => {
+      commitNow()
+    }, DEBOUNCE_MS)
+  }
+
   function replacePlan(next: Plan) {
     const clean = sanitizePlan(next)
     Object.assign(plan, clean)
@@ -88,10 +138,12 @@ function createPlanStore() {
     if (clean.cashBuffer === undefined) {
       plan.cashBuffer = undefined
     }
+    commitNow()
   }
 
   function pinBaseline() {
-    baselinePlan = structuredClone($state.snapshot(plan))
+    commitNow()
+    baselinePlan = structuredClone($state.snapshot(committedPlan))
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem(BASELINE_STORAGE_KEY, JSON.stringify(baselinePlan))
@@ -132,6 +184,15 @@ function createPlanStore() {
 
   return {
     plan,
+    get committedPlan() {
+      return committedPlan
+    },
+    get isPending() {
+      return isPending
+    },
+    get remainingSeconds() {
+      return Math.ceil(remainingMs / 1000)
+    },
     get valueMode() {
       return valueMode
     },
@@ -156,6 +217,8 @@ function createPlanStore() {
     get rawBaselineStats() {
       return rawBaselineStats
     },
+    notifyPlanChanged,
+    commitNow,
     replacePlan,
     pinBaseline,
     clearBaseline,

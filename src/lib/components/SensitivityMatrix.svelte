@@ -8,7 +8,7 @@
   let primaryMetric = $state<'successRate' | 'p50'>('successRate')
 
   let grid = $derived(
-    computeSensitivityGrid(planStore.plan, {
+    computeSensitivityGrid(planStore.committedPlan, {
       ageStep,
       expenseStep,
       gridRuns: 400,
@@ -17,9 +17,9 @@
   )
 
   let stopWorkOverrideAge = $derived.by(() => {
-    const swYears = planStore.plan.events
-      .filter((e): e is Extract<(typeof planStore.plan.events)[number], { kind: 'stopWorking' }> => e.kind === 'stopWorking')
-      .map((e) => e.atYear - planStore.plan.birthYear)
+    const swYears = planStore.committedPlan.events
+      .filter((e): e is Extract<(typeof planStore.committedPlan.events)[number], { kind: 'stopWorking' }> => e.kind === 'stopWorking')
+      .map((e) => e.atYear - planStore.committedPlan.birthYear)
     if (swYears.length === 0) return null
     return Math.min(...swYears)
   })
@@ -34,6 +34,7 @@
   function applyCell(retirementAge: number, annualExpenses: number) {
     planStore.plan.retirementAge = retirementAge
     planStore.plan.annualExpenses = annualExpenses
+    planStore.commitNow()
   }
 </script>
 
@@ -44,7 +45,7 @@
       <p class="subtitle">
         Tasso di successo e patrimonio mediano finale ({grid.runsPerCell} run/cella,
         {planStore.valueMode === 'real'
-          ? `€ reali ${planStore.plan.startYear}`
+          ? `€ reali ${planStore.committedPlan.startYear}`
           : '€ nominali'}). Clicca su una cella per applicarla al piano.
       </p>
     </div>
@@ -82,7 +83,7 @@
         <tr>
           <th class="corner">Spese \ Età ritiro</th>
           {#each grid.retirementAges as age}
-            <th class:current-axis={age === planStore.plan.retirementAge}>
+            <th class:current-axis={age === planStore.committedPlan.retirementAge}>
               {age} anni
             </th>
           {/each}
@@ -92,7 +93,7 @@
         {#each grid.cells as row, rIdx}
           {@const expense = grid.expenseLevels[rIdx]}
           <tr>
-            <th scope="row" class:current-axis={expense === planStore.plan.annualExpenses}>
+            <th scope="row" class:current-axis={expense === planStore.committedPlan.annualExpenses}>
               {formatEur(expense)}/a
             </th>
             {#each row as cell}

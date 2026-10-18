@@ -273,8 +273,35 @@ button.remove {
 
 .results-toolbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
+  gap: 0.75rem;
+}
+
+.pending-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.btn-recalc-now {
+  background: #d97706;
+  color: #fff;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.btn-recalc-now:hover {
+  background: #b45309;
 }
 
 .value-mode-toggle {
