@@ -6,6 +6,7 @@
   import EventsEditor from './lib/components/EventsEditor.svelte'
   import ResultsSummary from './lib/components/ResultsSummary.svelte'
   import FanChart from './lib/components/FanChart.svelte'
+  import SensitivityMatrix from './lib/components/SensitivityMatrix.svelte'
   import YearTable from './lib/components/YearTable.svelte'
 
   let stats = $derived(planStore.stats)
@@ -65,6 +66,7 @@
         plan={planStore.plan}
         valueMode={planStore.valueMode}
       />
+      <SensitivityMatrix />
       {#if stats.medianRun}
         <YearTable percentileRuns={stats.percentileRuns} years={stats.medianRun.years} />
       {/if}

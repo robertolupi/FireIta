@@ -40,7 +40,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Salva automaticamente il piano in `localStorage`, permette la condivisione tramite URL, l'esportazione JSON/CSV e il "Pin" di uno scenario di riferimento per confrontare i delta sui KPI e la mediana sul FanChart.
   - **File principali**: `src/lib/stores/plan.svelte.ts`, `src/lib/components/ResultsSummary.svelte`, `src/lib/components/FanChart.svelte`, `src/App.svelte`.
 
-- [ ] **[06 — Matrice di Sensitività (Heatmap Età di Ritiro vs. Spese Annue)](./06-ui-sensitivity-heatmap.md)**
+- [x] **[06 — Matrice di Sensitività (Heatmap Età di Ritiro vs. Spese Annue)](./06-ui-sensitivity-heatmap.md)**
   - **Complessità**: 🟡 Media
   - **Sintesi**: Aggiunge una griglia visuale (es. Età di pensionamento $\pm 4$ anni $\times$ Spese annue $\pm 20\%$) colorata per tasso di successo per valutare immediatamente il margine di sicurezza del piano.
   - **File principali**: `src/lib/components/SensitivityMatrix.svelte`, `src/App.svelte`.
