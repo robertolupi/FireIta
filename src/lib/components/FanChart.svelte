@@ -13,6 +13,7 @@
 
   interface Props {
     bands: YearBand[]
+    baselineBands?: YearBand[] | null
     plan?: Plan
     valueMode?: ValueMode
     swrReference?: number
@@ -20,6 +21,7 @@
 
   let {
     bands,
+    baselineBands = null,
     plan = planStore.plan,
     valueMode = planStore.valueMode,
     swrReference
@@ -42,12 +44,22 @@
 
   let chart = $derived.by(() => {
     if (bands.length === 0) return null
+    const firstAge = bands[0].age
+    const lastAge = bands[bands.length - 1].age
+    const ageSpan = Math.max(1, lastAge - firstAge)
+
+    const alignedBaseline = baselineBands
+      ? baselineBands.filter((b) => b.age >= firstAge && b.age <= lastAge)
+      : []
+
     const maxValue = Math.max(
       1,
       ...bands.map((b) => b.p90),
+      ...(baselineBands ? baselineBands.map((b) => b.p90) : []),
       ...(showFireTarget ? fireTargets : [])
     )
     const x = (i: number) => PAD_X + (i / Math.max(1, bands.length - 1)) * (W - 2 * PAD_X)
+    const xByAge = (age: number) => PAD_X + ((age - firstAge) / ageSpan) * (W - 2 * PAD_X)
 
     // Scala logaritmica: i valori sotto 1 € (patrimonio esaurito) sono clampati a 1
     const logMax = Math.max(1, Math.log10(maxValue))
@@ -81,6 +93,13 @@
       .map((b, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(b.p50).toFixed(1)}`)
       .join(' ')
 
+    const baselineMedian =
+      alignedBaseline.length > 0
+        ? alignedBaseline
+            .map((b, i) => `${i === 0 ? 'M' : 'L'}${xByAge(b.age).toFixed(1)},${y(b.p50).toFixed(1)}`)
+            .join(' ')
+        : ''
+
     const fireTargetPath =
       fireTargets.length > 0
         ? fireTargets
@@ -92,10 +111,11 @@
       outer: band('p90', 'p10'),
       inner: band('p75', 'p25'),
       median,
+      baselineMedian,
       fireTargetPath,
       yTicks,
-      firstAge: bands[0].age,
-      lastAge: bands[bands.length - 1].age,
+      firstAge,
+      lastAge,
       yZero: y(0),
       xStart: x(0),
       xEnd: x(bands.length - 1),
@@ -119,6 +139,11 @@
   let hoveredBand = $derived(
     hoveredIndex !== null && hoveredIndex >= 0 && hoveredIndex < bands.length
       ? bands[hoveredIndex]
+      : null
+  )
+  let hoveredBaselineBand = $derived(
+    hoveredBand && baselineBands
+      ? baselineBands.find((b) => b.age === hoveredBand.age) ?? null
       : null
   )
   let hoveredX = $derived(chart && hoveredIndex !== null ? chart.x(hoveredIndex) : null)
@@ -177,6 +202,10 @@
         <path d={chart.inner} class="band-inner" />
         <path d={chart.median} class="median" fill="none" />
 
+        {#if chart.baselineMedian}
+          <path d={chart.baselineMedian} class="baseline-median" fill="none" stroke-dasharray="6 4" />
+        {/if}
+
         {#if showFireTarget && chart.fireTargetPath}
           <path d={chart.fireTargetPath} class="fire-target-line" fill="none" stroke-dasharray="6 4" />
         {/if}
@@ -232,6 +261,12 @@
             <li class="p50"><span>P50 (Mediana):</span> <strong>{formatEur(hoveredBand.p50)}</strong></li>
             <li class="p25"><span>P25:</span> <strong>{formatEur(hoveredBand.p25)}</strong></li>
             <li class="p10"><span>P10 (Pessimista):</span> <strong>{formatEur(hoveredBand.p10)}</strong></li>
+            {#if hoveredBaselineBand}
+              <li class="baseline-row">
+                <span>Mediana Base:</span>
+                <strong>{formatEur(hoveredBaselineBand.p50)}</strong>
+              </li>
+            {/if}
             {#if showFireTarget && hoveredTarget !== null}
               <li class="target-row">
                 <span>Target FIRE:</span>
@@ -253,6 +288,9 @@
       <li><span class="swatch band-outer"></span> p10–p90</li>
       <li><span class="swatch band-inner"></span> p25–p75</li>
       <li><span class="swatch median-line"></span> mediana</li>
+      {#if chart.baselineMedian}
+        <li><span class="swatch baseline-swatch"></span> mediana scenario base</li>
+      {/if}
       {#if showFireTarget}
         <li><span class="swatch target-swatch"></span> Target FIRE ({formatPct(effectiveSwr)})</li>
       {/if}
@@ -339,6 +377,10 @@
   }
   .median {
     stroke: #1a5fa8;
+    stroke-width: 2;
+  }
+  .baseline-median {
+    stroke: #d97706;
     stroke-width: 2;
   }
   .fire-target-line {
@@ -430,6 +472,9 @@
   .tooltip-list li.p50 {
     color: #1a5fa8;
   }
+  .tooltip-list li.baseline-row {
+    color: #b45309;
+  }
   .tooltip-list li.target-row {
     border-top: 1px dashed #e5e7eb;
     padding-top: 0.2rem;
@@ -468,6 +513,11 @@
   .swatch.median-line {
     background: #1a5fa8;
     height: 3px;
+  }
+  .swatch.baseline-swatch {
+    background: transparent;
+    border-top: 2px dashed #d97706;
+    height: 0;
   }
   .swatch.target-swatch {
     background: transparent;

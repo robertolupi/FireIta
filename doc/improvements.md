@@ -35,7 +35,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Separa il tasso di sopravvivenza del capitale (`!depleted`) dal tasso di copertura integrale delle spese (`!expensesNotCovered`), fondamentale quando si usano strategie dinamiche (`guardrails` o `percentCap`) che evitano il default tagliando i consumi.
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/montecarlo.ts`, `src/lib/engine/stats.ts`, `src/lib/components/ResultsSummary.svelte`.
 
-- [ ] **[05 — Confronto Scenari A/B, Persistenza (`localStorage` / URL) ed Export](./05-ui-scenarios-persistence-export.md)**
+- [x] **[05 — Confronto Scenari A/B, Persistenza (`localStorage` / URL) ed Export](./05-ui-scenarios-persistence-export.md)**
   - **Complessità**: 🟡 Media
   - **Sintesi**: Salva automaticamente il piano in `localStorage`, permette la condivisione tramite URL, l'esportazione JSON/CSV e il "Pin" di uno scenario di riferimento per confrontare i delta sui KPI e la mediana sul FanChart.
   - **File principali**: `src/lib/stores/plan.svelte.ts`, `src/lib/components/ResultsSummary.svelte`, `src/lib/components/FanChart.svelte`, `src/App.svelte`.

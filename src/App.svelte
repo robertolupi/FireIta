@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { STORAGE_KEY } from './lib/persistence'
   import { planStore } from './lib/stores/plan.svelte'
+  import ScenarioToolbar from './lib/components/ScenarioToolbar.svelte'
   import PlanForm from './lib/components/PlanForm.svelte'
   import EventsEditor from './lib/components/EventsEditor.svelte'
   import ResultsSummary from './lib/components/ResultsSummary.svelte'
@@ -7,6 +9,18 @@
   import YearTable from './lib/components/YearTable.svelte'
 
   let stats = $derived(planStore.stats)
+  let baselineStats = $derived(planStore.baselineStats)
+
+  $effect(() => {
+    const snapshot = JSON.stringify(planStore.plan)
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, snapshot)
+      } catch {
+        // Ignora errori storage
+      }
+    }
+  })
 </script>
 
 <main>
@@ -14,6 +28,8 @@
     <h1>FireIta</h1>
     <p>Calcolatore FIRE (Financial Independence, Retire Early) con simulazione Monte Carlo e tassazione italiana sulle plusvalenze.</p>
   </header>
+
+  <ScenarioToolbar />
 
   <div class="layout">
     <div class="column">
@@ -42,8 +58,13 @@
         </div>
       </div>
 
-      <ResultsSummary {stats} />
-      <FanChart bands={stats.bands} plan={planStore.plan} valueMode={planStore.valueMode} />
+      <ResultsSummary {stats} {baselineStats} />
+      <FanChart
+        bands={stats.bands}
+        baselineBands={baselineStats?.bands ?? null}
+        plan={planStore.plan}
+        valueMode={planStore.valueMode}
+      />
       {#if stats.medianRun}
         <YearTable percentileRuns={stats.percentileRuns} years={stats.medianRun.years} />
       {/if}
