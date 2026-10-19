@@ -128,16 +128,20 @@ export interface HistoricalYearData {
   inflationRate: number
 }
 
+export type HistoricalDatasetId = 'usa' | 'italia'
+
 export type SimulationMode =
   | { type: 'parametric' } // Default attuale: log-normale i.i.d. + inflazione fissa plan.inflationRate
   | {
       type: 'historicalRolling'
-      stockAllocation?: number // 0..1, default 1.0 (o derivato da (1 - whitelistAllocation))
+      datasetId?: HistoricalDatasetId // default 'usa'
+      stockAllocation?: number // 0..1, default 1.0
       customDataset?: HistoricalYearData[]
     }
   | {
       type: 'blockBootstrap'
-      blockSize: number // es. 5 (anni contigui per blocco)
+      datasetId?: HistoricalDatasetId // default 'usa'
+      blockSize?: number // es. 5 (anni contigui per blocco)
       stationary?: boolean // false (default): Moving Block Bootstrap a blocchi fissi; true: Politis-Romano
       stockAllocation?: number // 0..1, default 1.0
       customDataset?: HistoricalYearData[]
@@ -151,7 +155,7 @@ export interface Plan {
 export interface YearState {
   // ... campi esistenti ...
   returnRate: number
-  /** Tasso di inflazione applicato nell'anno (default: plan.inflationRate) */
+  /** Tasso di inflazione applicato nell'anno (presente solo con inflazione stocastica) */
   inflationRate?: number
   // ...
 }
@@ -185,14 +189,15 @@ const inflationFactor = (fromYearIdx: number, toYearIdx: number): number => {
   return priceIndex[toYearIdx] / priceIndex[fromYearIdx]
 }
 ```
-- Alla riga 75:
-  ```typescript
-  const expenses = expensesBase * inflationFactor(expensesBaseYear, year)
-  ```
-- Alla riga 122:
-  ```typescript
-  const cap = retirementBase * inflationFactor(stop, year)
-  ```
+Punti di indicizzazione all'inflazione in `projection.ts` (stato del codice dopo i miglioramenti 07/09/11):
+- **Spese**: `const expenses = expensesBase * priceIndex[year]` (gli importi sono in termini reali a `startYear`, quindi il fattore è $\Phi(0, t)$ anche dopo `setExpenses`);
+- **Entrate ricorrenti `recurringIncome`**: fattore `priceIndex[year]` al posto di `Math.pow(1 + plan.inflationRate, year)`;
+- **Tetto `percentCap`**: `const cap = retirementBase * inflationFactor(stop, year)`;
+- **Target `constantDollar`**: `retirementBase * inflationFactor(stop, year)`;
+- **`guardrails`**: l'adeguamento annuale usa l'inflazione campionata dell'anno precedente, `currentWithdrawal *= 1 + inflationForYear(year - 1)`, e la Guyton-Klinger Inflation Rule verifica `inflationForYear(year - 1) > 0` al posto di `plan.inflationRate > 0`;
+- **`vpw`**: invariato — il rendimento reale di default (Fisher su `meanReturn`/`inflationRate`) resta un'assunzione a livello di piano.
+
+Con `inflations` omesso o costante tutti i casi coincidono bit-a-bit con il comportamento precedente.
 
 #### Funzioni di campionamento in `src/lib/engine/montecarlo.ts`
 ```typescript
@@ -240,8 +245,10 @@ export function sampleBlockBootstrapTrajectory(
 ## 4. Step di Implementazione
 
 1. **Creazione di `src/lib/engine/historicalData.ts`**:
-   - Definire e popolare la costante `HISTORICAL_MARKET_DATA: HistoricalYearData[]` con la serie storica annuale (1928–2024, azionario globale/USA, obbligazionario decennale e inflazione CPI/FOI, verificata e immutabile).
-   - Esportare una funzione helper `computeHistoricalPortfolioReturn(row: HistoricalYearData, stockAllocation: number): number`.
+   - Definire e popolare **due** serie storiche annue verificate e immutabili:
+     - `HISTORICAL_DATA_USA` (1928–2024): S&P 500 total return, Treasury USA 10 anni, CPI USA;
+     - `HISTORICAL_DATA_ITALIA` (1950–2024): stessi rendimenti di mercato della serie USA (proxy globale documentato: non esistono serie lunghe affidabili per azionario/obbligazionario italiano) con **inflazione italiana FOI/NIC ISTAT** — il rischio stagflattivo rilevante per un pensionato italiano (es. 1973–1982).
+   - Esportare `HISTORICAL_DATASETS: Record<HistoricalDatasetId, HistoricalYearData[]>`, le label UI e la funzione helper `computeHistoricalPortfolioReturn(row: HistoricalYearData, stockAllocation: number): number`.
 
 2. **Aggiornamento di `src/lib/engine/types.ts`**:
    - Aggiungere `HistoricalYearData` e `SimulationMode`.
@@ -258,8 +265,13 @@ export function sampleBlockBootstrapTrajectory(
      - `'historicalRolling'`: esegue `runProjection(plan, returns, inflations)` su ciascuna finestra storica.
      - `'blockBootstrap'`: esegue `plan.runs` simulazioni campionando blocchi di lunghezza `blockSize` con `mulberry32(plan.seed)` e passando sia `returns` sia `inflations` a `runProjection`.
 
-5. **Creazione della suite di test `src/lib/engine/__tests__/historical-bootstrap.test.ts`**:
-   - Implementare i test deterministici descritti nella Sezione 5.
+5. **Integrazione minima UI e persistenza**:
+   - `src/lib/persistence.ts`: `sanitizeSimulationMode` (accetta/sanitizza `type`, `datasetId`, `blockSize` 1–20, `stationary`, `stockAllocation` 0–1; ignora `customDataset` da fonti non fidate) e colonna CSV `InflazionePct` condizionale.
+   - `src/lib/components/PlanForm.svelte`: selettore di modalità (Parametrica / Storico Rolling / Block Bootstrap) con dataset, quota azionaria, dimensione blocco e variante Politis-Romano.
+   - `src/lib/components/ResultsSummary.svelte`: riga riepilogativa con modalità, dataset e quota azionaria attive.
+
+6. **Creazione della suite di test `src/lib/engine/__tests__/historical-bootstrap.test.ts`**:
+   - Implementare i test deterministici descritti nella Sezione 5, più: equivalenza `guardrails` con inflazione costante, sanity check dei dataset bundled, sanitizzazione/persistenza di `simulationMode`.
 
 ---
 
@@ -274,11 +286,12 @@ Tutti i test sono deterministici e verificabili tramite `npx vitest run`.
 
 ### Caso di Test 2: Shock Stagflattivo con Vettore `inflations` Variabile e `setExpenses`
 - **Setup**: `annualExpenses = 10_000`, `inflations = [0.10, 0.20, 0.00]`, `returns = [-0.15, -0.10, 0.05]`.
+- **Nota di semantica**: tutti gli importi del piano (`annualExpenses` e gli `amount` di `setExpenses`) sono espressi **in termini reali a `startYear`** (come codificato dal test esistente *"setExpenses considera l'importo in termini reali (rivalutato all'inflazione da startYear)"*): il fattore di rivalutazione è sempre $\Phi(0, t) = I_t$, anche dopo un evento `setExpenses` che cambia solo la base $E_{\text{base}}$.
 - **Verifica**:
   - Anno 0: `expenses = 10_000` ($I_0 = 1$).
   - Anno 1: `expenses = 10_000 * 1.10 = 11_000` ($I_1 = 1{,}10$).
   - Anno 2: `expenses = 10_000 * 1.10 * 1.20 = 13_200` ($I_2 = 1{,}32$).
-  - Se c'è un `setExpenses` a `startYear + 1` con `amount = 20_000`, all'anno 1 `expenses = 20_000` e all'anno 2 `expenses = 20_000 * 1.20 = 24_000`.
+  - Se c'è un `setExpenses` a `startYear + 1` con `amount = 20_000` (reali), all'anno 1 `expenses = 20_000 * 1.10 = 22_000` e all'anno 2 `expenses = 20_000 * 1.10 * 1.20 = 26_400`.
 
 ### Caso di Test 3: Rolling Historical Backtest su Mini-Dataset Sintetico
 - **Setup**: `customDataset` di 6 anni con valori noti, piano con `horizon = 4`, `simulationMode = { type: 'historicalRolling', stockAllocation: 0.6, customDataset }`.

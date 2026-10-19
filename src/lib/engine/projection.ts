@@ -49,7 +49,12 @@ export function computeVpwRate(
   return Math.max(minRate, Math.min(maxRate, rate))
 }
 
-function computeRecurringIncome(plan: Plan, year: number, calendarYear: number): number {
+function computeRecurringIncome(
+  plan: Plan,
+  year: number,
+  calendarYear: number,
+  cumulativeInflation: number
+): number {
   let sum = 0
   for (const event of plan.events) {
     if (
@@ -57,14 +62,14 @@ function computeRecurringIncome(plan: Plan, year: number, calendarYear: number):
       calendarYear >= event.fromYear &&
       (event.toYear === undefined || calendarYear <= event.toYear)
     ) {
-      const factor = event.inflationAdjusted !== false ? Math.pow(1 + plan.inflationRate, year) : 1
+      const factor = event.inflationAdjusted !== false ? cumulativeInflation : 1
       sum += event.amount * factor
     }
   }
   return sum
 }
 
-export function runProjection(plan: Plan, returns: number[]): YearState[] {
+export function runProjection(plan: Plan, returns: number[], inflations?: number[]): YearState[] {
   const horizon = horizonYears(plan)
   const stop = effectiveStopYear(plan)
   const timing: CashflowTiming = plan.cashflowTiming ?? 'legacy'
@@ -73,6 +78,19 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
   const expenseChanges = plan.events
     .filter((e): e is Extract<LifeEvent, { kind: 'setExpenses' }> => e.kind === 'setExpenses')
     .sort((a, b) => a.fromYear - b.fromYear)
+
+  // Indice cumulativo dei prezzi: priceIndex[0] = 1, priceIndex[t] = priceIndex[t-1] * (1 + pi_{t-1})
+  // Con inflations omesso (o costante) coincide con Math.pow(1 + plan.inflationRate, t)
+  const priceIndex: number[] = new Array(horizon + 1)
+  priceIndex[0] = 1
+  for (let y = 0; y < horizon; y++) {
+    priceIndex[y + 1] = priceIndex[y] * (1 + (inflations?.[y] ?? plan.inflationRate))
+  }
+  const inflationFactor = (fromYearIdx: number, toYearIdx: number): number => {
+    if (toYearIdx <= fromYearIdx) return 1
+    return priceIndex[toYearIdx] / priceIndex[fromYearIdx]
+  }
+  const inflationForYear = (y: number): number => inflations?.[y] ?? plan.inflationRate
 
   let portfolio = plan.initialPortfolio
   let costBasis = Math.min(plan.initialCostBasis, plan.initialPortfolio)
@@ -119,6 +137,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
             }
           : {}),
         returnRate: returns[year] ?? 0,
+        ...(inflations ? { inflationRate: inflationForYear(year) } : {}),
         investmentReturn: 0,
         startPortfolio: 0,
         endPortfolio: 0,
@@ -137,7 +156,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
 
     const retired = year >= stop
     const returnRate = returns[year] ?? 0
-    const expenses = expensesBase * Math.pow(1 + plan.inflationRate, year)
+    const expenses = expensesBase * priceIndex[year]
 
     // Inizializzazione del Cash Buffer al primo anno di pensionamento (scorporo proporzionale)
     if (cb && year === stop && cashBuffer === 0 && portfolio > 0) {
@@ -202,7 +221,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
       }
     }
 
-    const recurringInc = computeRecurringIncome(plan, year, calendarYear)
+    const recurringInc = computeRecurringIncome(plan, year, calendarYear, priceIndex[year])
     const workIncome = retired ? 0 : plan.annualIncome * Math.pow(1 + plan.incomeGrowthRate, year)
     const income = workIncome + recurringInc + ritaNetIncome
 
@@ -272,7 +291,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
 
       if (strategy.type === 'percentCap') {
         if (year === stop) retirementBase = startPortfolio * strategy.rate
-        const cap = retirementBase * Math.pow(1 + plan.inflationRate, year - stop)
+        const cap = retirementBase * inflationFactor(stop, year)
         if (income > totalNeeded) {
           const surplus = income - totalNeeded
           contribution = surplus
@@ -296,10 +315,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
         }
       } else if (strategy.type === 'constantDollar') {
         if (year === stop) retirementBase = startPortfolio * strategy.rate
-        const targetWithdrawal = Math.max(
-          retirementBase * Math.pow(1 + plan.inflationRate, year - stop),
-          expenses
-        )
+        const targetWithdrawal = Math.max(retirementBase * inflationFactor(stop, year), expenses)
         if (income > targetWithdrawal + oneTimeExpenses) {
           const surplus = income - totalNeeded
           contribution = surplus
@@ -357,12 +373,13 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           currentWithdrawal = Math.max(strategy.initialRate * startPortfolio, expenses)
         } else if (totalCurrentWealth > 0) {
           const prevReturn = returns[year - 1] ?? 0
+          const prevInflation = inflationForYear(year - 1)
           const skipInflation =
             Boolean(strategy.skipInflationAfterNegativeReturn) &&
             prevReturn < 0 &&
-            plan.inflationRate > 0
+            prevInflation > 0
           if (!skipInflation) {
-            currentWithdrawal *= 1 + plan.inflationRate
+            currentWithdrawal *= 1 + prevInflation
           }
           const effectiveRate = currentWithdrawal / totalCurrentWealth
           if (effectiveRate < strategy.lowerGuardrail) {
@@ -514,6 +531,7 @@ export function runProjection(plan: Plan, returns: number[]): YearState[] {
           }
         : {}),
       returnRate,
+      ...(inflations ? { inflationRate: inflationForYear(year) } : {}),
       investmentReturn,
       startPortfolio,
       endPortfolio,

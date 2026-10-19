@@ -54,7 +54,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Introduce l'imposta di bollo patrimoniale dello 0,20% annuo sul dossier titoli, le entrate previdenziali ricorrenti post-ritiro (es. pensione pubblica INPS o rendite), l'aliquota mista white-list (12,5% vs 26%) e/o la gestione Fondo Pensione / RITA.
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/tax.ts`, `src/lib/engine/projection.ts`, `src/lib/components/PlanForm.svelte`, `src/lib/components/EventsEditor.svelte`.
 
-- [ ] **[08 — Backtesting Storico e Block Bootstrap (Serie Storiche Reali e Inflazione Stocastica)](./08-engine-historical-backtesting-bootstrap.md)**
+- [x] **[08 — Backtesting Storico e Block Bootstrap (Serie Storiche Reali e Inflazione Stocastica)](./08-engine-historical-backtesting-bootstrap.md)**
   - **Complessità**: 🟠 Media-Alta
   - **Sintesi**: Affianca al Monte Carlo log-normale i.i.d. il backtesting su finestre storiche reali (*Rolling Historical Periods*) e il campionamento *Block Bootstrap* di blocchi pluriennali (rendimento + inflazione storica correlata).
   - **File principali**: `src/lib/engine/historicalData.ts`, `src/lib/engine/montecarlo.ts`, `src/lib/engine/projection.ts`, `src/lib/engine/types.ts`.

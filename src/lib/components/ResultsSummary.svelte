@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SimStats } from '../engine/stats'
+  import { HISTORICAL_DATASET_LABELS } from '../engine/historicalData'
   import { formatEur, formatPct } from '../format'
   import { planStore } from '../stores/plan.svelte'
 
@@ -10,6 +11,18 @@
     stats: SimStats
     baselineStats?: SimStats | null
   } = $props()
+
+  let simulationLabel = $derived.by(() => {
+    const mode = planStore.committedPlan.simulationMode
+    if (!mode || mode.type === 'parametric') return 'Parametrica (Monte Carlo log-normale)'
+    const dataset = HISTORICAL_DATASET_LABELS[mode.datasetId ?? 'usa']
+    const alloc = Math.round((mode.stockAllocation ?? 1) * 100)
+    if (mode.type === 'historicalRolling') {
+      return `Storico rolling · ${dataset} · azionario ${alloc}%`
+    }
+    const variant = mode.stationary ? 'stazionario' : `blocchi ${mode.blockSize ?? 5} anni`
+    return `Block bootstrap ${variant} · ${dataset} · azionario ${alloc}%`
+  })
 
   let rateClass = $derived(
     stats.successRate >= 0.9 ? 'good' : stats.successRate >= 0.75 ? 'warn' : 'bad'
@@ -45,6 +58,7 @@
 
 <section class="card">
   <h2>Risultati ({stats.runs} simulazioni)</h2>
+  <p class="derived">{simulationLabel}</p>
 
   <div class="success-rate {rateClass}">
     <span class="value">{formatPct(stats.successRate)}</span>

@@ -4,6 +4,7 @@ import type {
   LifeEvent,
   PensionFundConfig,
   Plan,
+  SimulationMode,
   WithdrawalStrategy,
   YearState
 } from './engine/types'
@@ -191,6 +192,43 @@ function sanitizeCashBuffer(raw: unknown): CashBufferConfig | undefined {
   }
 }
 
+function sanitizeDatasetId(raw: unknown): 'usa' | 'italia' | undefined {
+  return raw === 'usa' || raw === 'italia' ? raw : undefined
+}
+
+function sanitizeSimulationMode(raw: unknown): SimulationMode | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const sm = raw as Record<string, unknown>
+
+  if (sm.type === 'parametric') return { type: 'parametric' }
+
+  if (sm.type === 'historicalRolling') {
+    const mode: SimulationMode = { type: 'historicalRolling' }
+    const datasetId = sanitizeDatasetId(sm.datasetId)
+    if (datasetId !== undefined) mode.datasetId = datasetId
+    if (sm.stockAllocation !== undefined && Number.isFinite(Number(sm.stockAllocation))) {
+      mode.stockAllocation = finiteNumber(sm.stockAllocation, 1, 0, 1)
+    }
+    return mode
+  }
+
+  if (sm.type === 'blockBootstrap') {
+    const mode: SimulationMode = { type: 'blockBootstrap' }
+    const datasetId = sanitizeDatasetId(sm.datasetId)
+    if (datasetId !== undefined) mode.datasetId = datasetId
+    if (sm.blockSize !== undefined && Number.isFinite(Number(sm.blockSize))) {
+      mode.blockSize = Math.round(finiteNumber(sm.blockSize, 5, 1, 20))
+    }
+    if (typeof sm.stationary === 'boolean') mode.stationary = sm.stationary
+    if (sm.stockAllocation !== undefined && Number.isFinite(Number(sm.stockAllocation))) {
+      mode.stockAllocation = finiteNumber(sm.stockAllocation, 1, 0, 1)
+    }
+    return mode
+  }
+
+  return undefined
+}
+
 export function sanitizePlan(raw: unknown): Plan {
   const def = createDefaultPlan()
   if (!raw || typeof raw !== 'object') return def
@@ -258,6 +296,11 @@ export function sanitizePlan(raw: unknown): Plan {
     sanitized.cashBuffer = cashBuffer
   }
 
+  const simulationMode = sanitizeSimulationMode(obj.simulationMode)
+  if (simulationMode !== undefined) {
+    sanitized.simulationMode = simulationMode
+  }
+
   return sanitized
 }
 
@@ -277,6 +320,7 @@ export function decodePlanFromUrlParam(encoded: string): Plan | null {
 
 export function exportYearsToCsv(years: YearState[]): string {
   const hasCashBuffer = years.some((y) => y.cashBufferEnd !== undefined)
+  const hasInflation = years.some((y) => y.inflationRate !== undefined)
   const headers = [
     'Anno',
     'Eta',
@@ -289,6 +333,7 @@ export function exportYearsToCsv(years: YearState[]): string {
     'VenditaLorda',
     'ImpostePagate',
     'RendimentoPct',
+    ...(hasInflation ? ['InflazionePct'] : []),
     'RendimentoEur',
     'PatrimonioFine',
     'CostoFiscaleFine',
@@ -309,6 +354,7 @@ export function exportYearsToCsv(years: YearState[]): string {
       y.grossSale.toFixed(2),
       y.taxPaid.toFixed(2),
       (y.returnRate * 100).toFixed(2),
+      ...(hasInflation ? [((y.inflationRate ?? 0) * 100).toFixed(2)] : []),
       y.investmentReturn.toFixed(2),
       y.endPortfolio.toFixed(2),
       y.endCostBasis.toFixed(2),

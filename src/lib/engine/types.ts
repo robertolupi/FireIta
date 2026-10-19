@@ -58,6 +58,36 @@ export interface PensionFundConfig {
 
 export type CashflowTiming = 'legacy' | 'startOfYear' | 'midYear'
 
+export interface HistoricalYearData {
+  calendarYear: number
+  equityReturn: number
+  bondReturn: number
+  inflationRate: number
+}
+
+export type HistoricalDatasetId = 'usa' | 'italia'
+
+export type SimulationMode =
+  | { type: 'parametric' }
+  | {
+      type: 'historicalRolling'
+      datasetId?: HistoricalDatasetId
+      /** Peso azionario 0..1 (default 1) */
+      stockAllocation?: number
+      customDataset?: HistoricalYearData[]
+    }
+  | {
+      type: 'blockBootstrap'
+      datasetId?: HistoricalDatasetId
+      /** Anni contigui per blocco (default 5) */
+      blockSize?: number
+      /** true: Stationary Bootstrap di Politis-Romano; false (default): Moving Block Bootstrap */
+      stationary?: boolean
+      /** Peso azionario 0..1 (default 1) */
+      stockAllocation?: number
+      customDataset?: HistoricalYearData[]
+    }
+
 export interface CashBufferConfig {
   enabled: boolean
   /** Numero di anni di spese correnti da mantenere nel buffer (es. 2.0) */
@@ -94,6 +124,8 @@ export interface Plan {
   cashflowTiming?: CashflowTiming
   /** Configurazione opzionale Cuscinetto di Liquidità (Cash Buffer anti-SRR) */
   cashBuffer?: CashBufferConfig
+  /** Modalità di generazione dei rendimenti/inflazione (default: parametrica log-normale) */
+  simulationMode?: SimulationMode
   withdrawalStrategy: WithdrawalStrategy
   events: LifeEvent[]
 }
@@ -126,6 +158,8 @@ export interface YearState {
   /** Movimento netto sul Cash Buffer nell'anno (= bufferRefill - bufferWithdrawal) */
   cashBufferMovement?: number
   returnRate: number
+  /** Tasso di inflazione applicato nell'anno (presente solo con simulazione a inflazione stocastica) */
+  inflationRate?: number
   investmentReturn: number
   startPortfolio: number
   endPortfolio: number

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { planStore } from '../stores/plan.svelte'
   import { effectiveCapitalGainsTaxRate } from '../engine/tax'
+  import { HISTORICAL_DATASET_LABELS } from '../engine/historicalData'
+  import type { SimulationMode } from '../engine/types'
 
   const plan = planStore.plan
 
@@ -59,6 +61,65 @@
   }
 
   let ws = $derived(plan.withdrawalStrategy)
+  let sm: SimulationMode = $derived(plan.simulationMode ?? { type: 'parametric' })
+
+  function setSimulationMode(type: string) {
+    const cur = plan.simulationMode
+    const carry =
+      cur?.type === 'historicalRolling' || cur?.type === 'blockBootstrap' ? cur : undefined
+    if (type === 'historicalRolling') {
+      plan.simulationMode = {
+        type: 'historicalRolling',
+        datasetId: carry?.datasetId ?? 'usa',
+        stockAllocation: carry?.stockAllocation ?? 1
+      }
+    } else if (type === 'blockBootstrap') {
+      plan.simulationMode = {
+        type: 'blockBootstrap',
+        datasetId: carry?.datasetId ?? 'usa',
+        stockAllocation: carry?.stockAllocation ?? 1,
+        blockSize: cur?.type === 'blockBootstrap' ? (cur.blockSize ?? 5) : 5,
+        stationary: cur?.type === 'blockBootstrap' ? (cur.stationary ?? false) : false
+      }
+    } else {
+      plan.simulationMode = undefined
+    }
+  }
+
+  function setSimDataset(e: Event) {
+    const val = (e.currentTarget as HTMLSelectElement).value
+    const mode = plan.simulationMode
+    if (
+      (mode?.type === 'historicalRolling' || mode?.type === 'blockBootstrap') &&
+      (val === 'usa' || val === 'italia')
+    ) {
+      mode.datasetId = val
+    }
+  }
+
+  function setSimStockAllocation(e: Event) {
+    const mode = plan.simulationMode
+    if (mode?.type === 'historicalRolling' || mode?.type === 'blockBootstrap') {
+      mode.stockAllocation = Number((e.currentTarget as HTMLInputElement).value) / 100
+    }
+  }
+
+  function setSimBlockSize(e: Event) {
+    const mode = plan.simulationMode
+    if (mode?.type === 'blockBootstrap') {
+      mode.blockSize = Math.max(
+        1,
+        Math.min(20, Math.round(Number((e.currentTarget as HTMLInputElement).value)))
+      )
+    }
+  }
+
+  function setSimStationary(e: Event) {
+    const mode = plan.simulationMode
+    if (mode?.type === 'blockBootstrap') {
+      mode.stationary = (e.currentTarget as HTMLInputElement).checked
+    }
+  }
 
   function setStrategy(type: string) {
     if (type === plan.withdrawalStrategy.type) return
@@ -442,14 +503,72 @@
   </fieldset>
 
   <fieldset>
-    <legend>Simulazione Monte Carlo</legend>
+    <legend>Simulazione</legend>
     <label>
-      Numero di run
-      <input type="number" bind:value={plan.runs} min="1" max="20000" step="100" />
+      Modalità
+      <select
+        value={sm.type}
+        onchange={(e) => setSimulationMode((e.currentTarget as HTMLSelectElement).value)}
+      >
+        <option value="parametric">Parametrica (Monte Carlo log-normale)</option>
+        <option value="historicalRolling">Storico rolling (finestre reali)</option>
+        <option value="blockBootstrap">Block bootstrap storico</option>
+      </select>
     </label>
-    <label>
-      Seed
-      <input type="number" bind:value={plan.seed} step="1" />
-    </label>
+    {#if sm.type !== 'parametric'}
+      <label>
+        Serie storica
+        <select value={sm.datasetId ?? 'usa'} onchange={setSimDataset}>
+          <option value="usa">{HISTORICAL_DATASET_LABELS.usa}</option>
+          <option value="italia">{HISTORICAL_DATASET_LABELS.italia}</option>
+        </select>
+      </label>
+      <label>
+        Quota azionaria (%)
+        <input
+          type="number"
+          value={(sm.stockAllocation ?? 1) * 100}
+          oninput={setSimStockAllocation}
+          min="0"
+          max="100"
+          step="5"
+        />
+      </label>
+    {/if}
+    {#if sm.type === 'blockBootstrap'}
+      <label>
+        Dimensione blocco (anni)
+        <input
+          type="number"
+          value={sm.blockSize ?? 5}
+          oninput={setSimBlockSize}
+          min="1"
+          max="20"
+          step="1"
+        />
+      </label>
+      <label>
+        <span>
+          <input
+            type="checkbox"
+            checked={sm.stationary ?? false}
+            onchange={setSimStationary}
+          />
+          Blocchi a lunghezza variabile (Politis-Romano)
+        </span>
+      </label>
+    {/if}
+    {#if sm.type === 'historicalRolling'}
+      <p class="derived">Il numero di traiettorie è dato dalle finestre storiche disponibili</p>
+    {:else}
+      <label>
+        Numero di run
+        <input type="number" bind:value={plan.runs} min="1" max="20000" step="100" />
+      </label>
+      <label>
+        Seed
+        <input type="number" bind:value={plan.seed} step="1" />
+      </label>
+    {/if}
   </fieldset>
 </section>
