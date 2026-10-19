@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Plan, SimResult } from '../types'
 import { runMonteCarlo } from '../montecarlo'
-import { compareSimRuns, computeStats } from '../stats'
+import { compareSimRuns, computeStats, percentile, percentileTyped } from '../stats'
 
 function basePlan(overrides: Partial<Plan> = {}): Plan {
   return {
@@ -165,4 +165,14 @@ describe('computeStats — KPI sopravvivenza patrimonio vs copertura spese', () 
       }
     }
   })
+
+  it('percentileTyped restituisce valori identici a percentile con array ordinati', () => {
+    const raw = [10, 25, 40, 55, 80, 100, 150, 200]
+    const typed = new Float64Array(raw)
+    for (const p of [0, 10, 25, 50, 75, 90, 100]) {
+      expect(percentile(raw, p)).toBe(percentileTyped(typed, p))
+    }
+    expect(percentileTyped(new Float64Array([]), 50)).toBe(0)
+  })
 })
+

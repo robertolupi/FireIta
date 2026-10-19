@@ -7,6 +7,7 @@
   import ResultsSummary from './lib/components/ResultsSummary.svelte'
   import FanChart from './lib/components/FanChart.svelte'
   import SensitivityMatrix from './lib/components/SensitivityMatrix.svelte'
+  import GoalSeekCard from './lib/components/GoalSeekCard.svelte'
   import YearTable from './lib/components/YearTable.svelte'
 
   let stats = $derived(planStore.stats)
@@ -47,6 +48,10 @@
               Ricalcola ora
             </button>
           </div>
+        {:else if planStore.isCalculating}
+          <div class="calculating-banner" role="status" aria-live="polite">
+            <span>Calcolo Monte Carlo in corso nel Web Worker…</span>
+          </div>
         {/if}
         <div class="value-mode-toggle" role="group" aria-label="Modalità valuta">
           <button
@@ -68,7 +73,11 @@
         </div>
       </div>
 
-      <div class="results-content" class:outdated={planStore.isPending} aria-busy={planStore.isPending}>
+      <div
+        class="results-content"
+        class:outdated={planStore.isPending || planStore.isCalculating}
+        aria-busy={planStore.isPending || planStore.isCalculating}
+      >
         <ResultsSummary {stats} {baselineStats} />
         <FanChart
           bands={stats.bands}
@@ -76,6 +85,7 @@
           plan={planStore.committedPlan}
           valueMode={planStore.valueMode}
         />
+        <GoalSeekCard />
         <SensitivityMatrix />
         {#if stats.medianRun}
           <YearTable percentileRuns={stats.percentileRuns} years={stats.medianRun.years} />

@@ -291,6 +291,24 @@ button.remove {
   font-size: 0.82rem;
 }
 
+.calculating-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+  animation: pulse-slow 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
 .btn-recalc-now {
   background: #d97706;
   color: #fff;

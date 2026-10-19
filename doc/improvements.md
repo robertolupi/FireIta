@@ -74,7 +74,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Affina il timing dei prelievi rispetto ai rendimenti di mercato (inizio anno / mid-year) e introduce un *Cash Buffer* (1–3 anni di spese in liquidità) da utilizzare negli anni di mercato orso per evitare di vendere azioni in drawdown.
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/projection.ts`, `src/lib/components/PlanForm.svelte`.
 
-- [ ] **[12 — Esecuzione Asincrona via Web Worker, Ottimizzazione Memoria e Risolutore Inverso ("Goal Seek")](./12-engine-webworker-goalseek.md)**
+- [x] **[12 — Esecuzione Asincrona via Web Worker, Ottimizzazione Memoria e Risolutore Inverso ("Goal Seek")](./12-engine-webworker-goalseek.md)**
   - **Complessità**: 🟠 Media-Alta
   - **Sintesi**: Ottimizza `computeStats`, sposta il calcolo Monte Carlo pesante in un Web Worker per mantenere la UI fluida a 60 fps e aggiunge un risolutore inverso (*Goal Seek* per bisezione) che calcola automaticamente età minima FIRE o spesa massima sostenibile.
   - **File principali**: `src/lib/engine/stats.ts`, `src/lib/engine/goalSeek.ts`, `src/lib/workers/sim.worker.ts`, `src/lib/stores/plan.svelte.ts`.

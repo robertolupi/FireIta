@@ -71,6 +71,14 @@ function pickRunAtQuantile(sortedRuns: SimResult[], q: number): SimResult | null
   return sortedRuns[idx]
 }
 
+export function percentileTyped(sortedValues: Float64Array, p: number): number {
+  if (sortedValues.length === 0) return 0
+  const index = (p / 100) * (sortedValues.length - 1)
+  const lower = Math.floor(index)
+  const upper = Math.ceil(index)
+  return sortedValues[lower] + (sortedValues[upper] - sortedValues[lower]) * (index - lower)
+}
+
 export function computeStats(results: SimResult[]): SimStats {
   if (results.length === 0) {
     return {
@@ -95,11 +103,17 @@ export function computeStats(results: SimResult[]): SimStats {
     }
   }
 
-  const finals = results.map((r) => r.finalPortfolio).sort((a, b) => a - b)
+  const runCount = results.length
+  const finalsBuffer = new Float64Array(runCount)
+  for (let r = 0; r < runCount; r++) {
+    finalsBuffer[r] = results[r].finalPortfolio
+  }
+  finalsBuffer.sort()
+
   const successes = results.filter((r) => r.success).length
   const fullCoverages = results.filter((r) => r.fullCoverage).length
   const cutSpendingRuns = results.filter((r) => r.success && !r.fullCoverage).length
-  const depletedRuns = results.length - successes
+  const depletedRuns = runCount - successes
 
   const depletionAges = results
     .filter((r) => r.depletionYear !== null)
@@ -121,19 +135,26 @@ export function computeStats(results: SimResult[]): SimStats {
 
   const yearCount = results[0].years.length
   const bands: YearBand[] = []
+  const colBuffer = new Float64Array(runCount)
+
   for (let year = 0; year < yearCount; year++) {
-    const values = results.map((r) => r.years[year].endPortfolio).sort((a, b) => a - b)
-    const aliveCount = results.filter((r) => !r.years[year].depleted).length
+    let aliveCount = 0
+    for (let r = 0; r < runCount; r++) {
+      const y = results[r].years[year]
+      colBuffer[r] = y.endPortfolio
+      if (!y.depleted) aliveCount++
+    }
+    colBuffer.sort()
     bands.push({
       year,
       age: results[0].years[year].age,
       calendarYear: results[0].years[year].calendarYear,
-      survivalRate: aliveCount / results.length,
-      p10: percentile(values, 10),
-      p25: percentile(values, 25),
-      p50: percentile(values, 50),
-      p75: percentile(values, 75),
-      p90: percentile(values, 90)
+      survivalRate: aliveCount / runCount,
+      p10: percentileTyped(colBuffer, 10),
+      p25: percentileTyped(colBuffer, 25),
+      p50: percentileTyped(colBuffer, 50),
+      p75: percentileTyped(colBuffer, 75),
+      p90: percentileTyped(colBuffer, 90)
     })
   }
 
@@ -148,17 +169,17 @@ export function computeStats(results: SimResult[]): SimStats {
   const medianRun = percentileRuns.p50
 
   return {
-    runs: results.length,
-    successRate: successes / results.length,
-    fullCoverageRate: fullCoverages / results.length,
-    cutSpendingRate: cutSpendingRuns / results.length,
-    depletionRate: depletedRuns / results.length,
+    runs: runCount,
+    successRate: successes / runCount,
+    fullCoverageRate: fullCoverages / runCount,
+    cutSpendingRate: cutSpendingRuns / runCount,
+    depletionRate: depletedRuns / runCount,
     finalPercentiles: {
-      p10: percentile(finals, 10),
-      p25: percentile(finals, 25),
-      p50: percentile(finals, 50),
-      p75: percentile(finals, 75),
-      p90: percentile(finals, 90)
+      p10: percentileTyped(finalsBuffer, 10),
+      p25: percentileTyped(finalsBuffer, 25),
+      p50: percentileTyped(finalsBuffer, 50),
+      p75: percentileTyped(finalsBuffer, 75),
+      p90: percentileTyped(finalsBuffer, 90)
     },
     meanDepletionAge:
       depletionAges.length > 0
