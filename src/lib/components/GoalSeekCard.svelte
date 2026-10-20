@@ -89,8 +89,8 @@
     </div>
 
     <div class="control-group">
-      <label for="goalseek-rate">Probabilità di successo target</label>
-      <div class="rate-presets">
+      <span class="group-label">Probabilità di successo target</span>
+      <div class="rate-presets" role="group" aria-label="Probabilità di successo target">
         {#each [0.8, 0.85, 0.9, 0.95] as r}
           <button
             type="button"
@@ -202,7 +202,8 @@
     min-width: 200px;
   }
 
-  .control-group label {
+  .control-group label,
+  .control-group .group-label {
     font-size: 0.8rem;
     font-weight: 600;
     color: #475569;

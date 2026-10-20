@@ -57,7 +57,28 @@ export function deflateYearState(
     investmentReturn: state.investmentReturn / d,
     startPortfolio: state.startPortfolio / d,
     endPortfolio: state.endPortfolio / d,
-    endCostBasis: state.endCostBasis / d
+    endCostBasis: state.endCostBasis / d,
+    ...(state.rebalanceTaxPaid !== undefined
+      ? { rebalanceTaxPaid: state.rebalanceTaxPaid / d }
+      : {}),
+    ...(state.buckets
+      ? {
+          buckets: {
+            equity: {
+              value: state.buckets.equity.value / d,
+              costBasis: state.buckets.equity.costBasis / d
+            },
+            bonds: {
+              value: state.buckets.bonds.value / d,
+              costBasis: state.buckets.bonds.costBasis / d
+            },
+            cash: {
+              value: state.buckets.cash.value / d,
+              costBasis: state.buckets.cash.costBasis / d
+            }
+          }
+        }
+      : {})
   }
 }
 

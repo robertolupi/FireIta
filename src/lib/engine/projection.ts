@@ -1,4 +1,14 @@
-import type { CashflowTiming, LifeEvent, Plan, YearState } from './types'
+import type {
+  AssetBuckets,
+  AssetClassId,
+  AssetWeights,
+  AssetYearReturns,
+  CashflowTiming,
+  LifeEvent,
+  Plan,
+  ProjectionReturns,
+  YearState
+} from './types'
 import {
   applyStampDuty,
   effectiveCapitalGainsTaxRate,
@@ -6,6 +16,19 @@ import {
   sellWithTax,
   WHITELIST_TAX_RATE
 } from './tax'
+import {
+  allocateProportionally,
+  ASSET_CLASS_IDS,
+  blendedReturn,
+  cloneBuckets,
+  computeTargetWeights,
+  contributeToBuckets,
+  emptyBuckets,
+  rebalanceBuckets,
+  totalCostBasis,
+  totalValue,
+  withdrawFromBuckets
+} from './allocation'
 
 const PENSION_FUND_DEDUCTION_CAP = 5164.57
 
@@ -69,7 +92,11 @@ function computeRecurringIncome(
   return sum
 }
 
-export function runProjection(plan: Plan, returns: number[], inflations?: number[]): YearState[] {
+export function runProjection(
+  plan: Plan,
+  returns: ProjectionReturns,
+  inflations?: number[]
+): YearState[] {
   const horizon = horizonYears(plan)
   const stop = effectiveStopYear(plan)
   const timing: CashflowTiming = plan.cashflowTiming ?? 'legacy'
@@ -100,6 +127,34 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
   let currentWithdrawal = 0
   let depleted = portfolio <= 0
 
+  // Portafoglio multi-asset: i bucket sono la fonte di verità, portfolio/costBasis
+  // restano mirror scalari riallineati dopo ogni operazione
+  const ma = plan.multiAsset
+  const assetTaxRates: Record<AssetClassId, number> | null = ma
+    ? {
+        equity: ma.assets.equity.taxRate,
+        bonds: ma.assets.bonds.taxRate,
+        cash: ma.assets.cash.taxRate
+      }
+    : null
+  let buckets: AssetBuckets | null = null
+  if (ma) {
+    buckets = allocateProportionally(
+      computeTargetWeights(ma.glidepath, 0, stop),
+      plan.initialPortfolio,
+      Math.min(plan.initialCostBasis, plan.initialPortfolio)
+    )
+    portfolio = totalValue(buckets)
+    costBasis = totalCostBasis(buckets)
+  }
+  const syncFromBuckets = () => {
+    if (buckets) {
+      portfolio = totalValue(buckets)
+      costBasis = totalCostBasis(buckets)
+    }
+  }
+  let prevYearReturn = 0
+
   const pf = plan.pensionFund
   let pfBalance = pf ? Math.max(0, pf.initialBalance) : 0
   let pfTaxableBase = pf
@@ -111,6 +166,8 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
   for (let year = 0; year < horizon; year++) {
     const age = currentAge(plan) + year
     const calendarYear = plan.startYear + year
+    const rawReturn = returns[year]
+    const scalarReturn = typeof rawReturn === 'number' ? rawReturn : 0
 
     if (depleted) {
       states.push({
@@ -136,7 +193,14 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
               cashBufferMovement: 0
             }
           : {}),
-        returnRate: returns[year] ?? 0,
+        ...(ma
+          ? {
+              buckets: emptyBuckets(),
+              targetWeights: computeTargetWeights(ma.glidepath, year, stop),
+              rebalanceTaxPaid: 0
+            }
+          : {}),
+        returnRate: scalarReturn,
         ...(inflations ? { inflationRate: inflationForYear(year) } : {}),
         investmentReturn: 0,
         startPortfolio: 0,
@@ -155,8 +219,21 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
     }
 
     const retired = year >= stop
-    const returnRate = returns[year] ?? 0
+    const assetReturns: AssetYearReturns | null = ma
+      ? rawReturn !== null && typeof rawReturn === 'object'
+        ? rawReturn
+        : { equity: scalarReturn, bonds: scalarReturn, cash: scalarReturn }
+      : null
+    const returnRate =
+      buckets && assetReturns
+        ? assetReturns.equity === assetReturns.bonds && assetReturns.bonds === assetReturns.cash
+          ? assetReturns.equity
+          : blendedReturn(buckets, assetReturns)
+        : scalarReturn
     const expenses = expensesBase * priceIndex[year]
+    const targetWeightsNow: AssetWeights | null = ma
+      ? computeTargetWeights(ma.glidepath, year, stop)
+      : null
 
     // Inizializzazione del Cash Buffer al primo anno di pensionamento (scorporo proporzionale)
     if (cb && year === stop && cashBuffer === 0 && portfolio > 0) {
@@ -164,8 +241,16 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
       const initAllocation = Math.min(portfolio, targetInitBuffer)
       if (initAllocation > 0) {
         const remainingRatio = (portfolio - initAllocation) / portfolio
-        portfolio -= initAllocation
-        costBasis *= remainingRatio
+        if (buckets) {
+          for (const id of ASSET_CLASS_IDS) {
+            buckets[id].value *= remainingRatio
+            buckets[id].costBasis *= remainingRatio
+          }
+          syncFromBuckets()
+        } else {
+          portfolio -= initAllocation
+          costBasis *= remainingRatio
+        }
         cashBuffer = initAllocation
       }
     }
@@ -181,7 +266,8 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
     let bufferRefill = 0
     let expensesNotCovered = false
 
-    const isMarketStressed = Boolean(cb && returnRate < (cb.drawdownThreshold ?? 0))
+    const stressSignal = assetReturns ? assetReturns.equity : returnRate
+    const isMarketStressed = Boolean(cb && stressSignal < (cb.drawdownThreshold ?? 0))
 
     // Gestione Fondo Pensione Complementare / RITA
     let pfNetOutflow = 0
@@ -225,11 +311,31 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
     const workIncome = retired ? 0 : plan.annualIncome * Math.pow(1 + plan.incomeGrowthRate, year)
     const income = workIncome + recurringInc + ritaNetIncome
 
+    const addContribution = (amount: number) => {
+      if (amount <= 0) return
+      if (buckets && targetWeightsNow) {
+        contributeToBuckets(buckets, amount, targetWeightsNow)
+        syncFromBuckets()
+      } else {
+        portfolio += amount
+        costBasis += amount
+      }
+    }
+
     const sell = (netNeeded: number): number => {
       if (netNeeded <= 0) return 0
       if (portfolio <= 0) {
         if (cashBuffer <= 0) depleted = true
         return 0
+      }
+      if (buckets && assetTaxRates && targetWeightsNow) {
+        const result = withdrawFromBuckets(buckets, netNeeded, targetWeightsNow, assetTaxRates)
+        grossSale += result.grossSale
+        taxPaid += result.taxPaid
+        withdrawal += result.netProceeds
+        syncFromBuckets()
+        if (result.depleted && cashBuffer <= 0) depleted = true
+        return result.netProceeds
       }
       const result = sellWithTax(portfolio, costBasis, netNeeded, effectiveTaxRate)
       grossSale += result.grossSale
@@ -295,8 +401,7 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         if (income > totalNeeded) {
           const surplus = income - totalNeeded
           contribution = surplus
-          portfolio += surplus
-          costBasis += surplus
+          addContribution(surplus)
         } else {
           const netNeeded = totalNeeded - income
           const obtained = spendNeed(Math.min(netNeeded, cap))
@@ -306,8 +411,7 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         if (income > totalNeeded) {
           const surplus = income - totalNeeded
           contribution = surplus
-          portfolio += surplus
-          costBasis += surplus
+          addContribution(surplus)
         } else {
           const netNeeded = totalNeeded - income
           const obtained = spendNeed(netNeeded)
@@ -319,8 +423,7 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         if (income > targetWithdrawal + oneTimeExpenses) {
           const surplus = income - totalNeeded
           contribution = surplus
-          portfolio += surplus
-          costBasis += surplus
+          addContribution(surplus)
         } else {
           const incomeForBase = Math.min(income, targetWithdrawal)
           const remIncome = Math.max(0, income - incomeForBase)
@@ -338,7 +441,13 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         }
       } else if (strategy.type === 'vpw') {
         const remainingYears = Math.max(1, horizon - year)
-        const defaultRealReturn = (1 + plan.meanReturn) / (1 + plan.inflationRate) - 1
+        const expectedMeanReturn =
+          ma && targetWeightsNow
+            ? targetWeightsNow.equity * ma.assets.equity.meanReturn +
+              targetWeightsNow.bonds * ma.assets.bonds.meanReturn +
+              targetWeightsNow.cash * ma.assets.cash.meanReturn
+            : plan.meanReturn
+        const defaultRealReturn = (1 + expectedMeanReturn) / (1 + plan.inflationRate) - 1
         const rReal = strategy.realReturnRate ?? defaultRealReturn
         const vpwRate = computeVpwRate(
           remainingYears,
@@ -351,8 +460,7 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         if (income > targetWithdrawal + oneTimeExpenses) {
           const surplus = income - totalNeeded
           contribution = surplus
-          portfolio += surplus
-          costBasis += surplus
+          addContribution(surplus)
         } else {
           const incomeForBase = Math.min(income, targetWithdrawal)
           const remIncome = Math.max(0, income - incomeForBase)
@@ -372,7 +480,7 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         if (year === stop) {
           currentWithdrawal = Math.max(strategy.initialRate * startPortfolio, expenses)
         } else if (totalCurrentWealth > 0) {
-          const prevReturn = returns[year - 1] ?? 0
+          const prevReturn = prevYearReturn
           const prevInflation = inflationForYear(year - 1)
           const skipInflation =
             Boolean(strategy.skipInflationAfterNegativeReturn) &&
@@ -392,8 +500,7 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         if (income > currentWithdrawal + oneTimeExpenses) {
           const surplus = income - totalNeeded
           contribution = surplus
-          portfolio += surplus
-          costBasis += surplus
+          addContribution(surplus)
         } else {
           const incomeForBase = Math.min(income, currentWithdrawal)
           const remIncome = Math.max(0, income - incomeForBase)
@@ -416,13 +523,31 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
 
     let investmentReturn = 0
 
+    // Applica il rendimento annuo: per-bucket in modalità multi-asset (con scala
+    // proporzionale all'effectiveBase per il timing midYear), scalare altrimenti
+    const applyInvestmentReturn = (effectiveBase?: number) => {
+      if (buckets && assetReturns) {
+        const scale = effectiveBase !== undefined ? (portfolio > 0 ? effectiveBase / portfolio : 0) : 1
+        investmentReturn = 0
+        for (const id of ASSET_CLASS_IDS) {
+          const ir = buckets[id].value * scale * assetReturns[id]
+          buckets[id].value = Math.max(0, buckets[id].value + ir)
+          investmentReturn += ir
+        }
+        syncFromBuckets()
+      } else {
+        const base = effectiveBase ?? portfolio
+        investmentReturn = base * returnRate
+        portfolio = Math.max(0, portfolio + investmentReturn)
+      }
+    }
+
     if (!retired) {
       const investedBeforeCf = portfolio
       const net = income - expenses - pfNetOutflow
       contribution = net
       if (net > 0) {
-        portfolio += net
-        costBasis += net
+        addContribution(net)
       } else if (net < 0) {
         if (sell(-net) < -net - 1e-9) expensesNotCovered = true
       }
@@ -437,19 +562,16 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
           0,
           investedBeforeCf + 0.5 * Math.max(0, contribution) - 0.5 * grossSale
         )
-        investmentReturn = effectiveBase * returnRate
+        applyInvestmentReturn(effectiveBase)
       } else {
-        investmentReturn = portfolio * returnRate
+        applyInvestmentReturn()
       }
-      portfolio = Math.max(0, portfolio + investmentReturn)
     } else if (timing === 'legacy') {
-      investmentReturn = portfolio * returnRate
-      portfolio = Math.max(0, portfolio + investmentReturn)
+      applyInvestmentReturn()
       executeRetirementCashflow()
     } else if (timing === 'startOfYear') {
       executeRetirementCashflow()
-      investmentReturn = portfolio * returnRate
-      portfolio = Math.max(0, portfolio + investmentReturn)
+      applyInvestmentReturn()
     } else {
       // timing === 'midYear'
       const investedBeforeCf = portfolio
@@ -458,8 +580,7 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         0,
         investedBeforeCf + 0.5 * Math.max(0, contribution) - 0.5 * grossSale
       )
-      investmentReturn = effectiveBase * returnRate
-      portfolio = Math.max(0, portfolio + investmentReturn)
+      applyInvestmentReturn(effectiveBase)
     }
 
     // Rendimento e ricostituzione (Refill) del Cash Buffer in fase di pensionamento
@@ -473,30 +594,65 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
         const excessReturn = Math.max(0, investmentReturn - withdrawal)
         const refillTarget = Math.min(deficit, excessReturn)
         if (refillTarget > 0) {
-          const refillSale = sellWithTax(portfolio, costBasis, refillTarget, effectiveTaxRate)
-          grossSale += refillSale.grossSale
-          taxPaid += refillSale.tax
-          portfolio = refillSale.remainingPortfolio
-          costBasis = refillSale.remainingCostBasis
-          bufferRefill = refillSale.netProceeds
-          cashBuffer += refillSale.netProceeds
+          if (buckets && assetTaxRates && targetWeightsNow) {
+            const refill = withdrawFromBuckets(buckets, refillTarget, targetWeightsNow, assetTaxRates)
+            grossSale += refill.grossSale
+            taxPaid += refill.taxPaid
+            bufferRefill = refill.netProceeds
+            cashBuffer += refill.netProceeds
+            syncFromBuckets()
+          } else {
+            const refillSale = sellWithTax(portfolio, costBasis, refillTarget, effectiveTaxRate)
+            grossSale += refillSale.grossSale
+            taxPaid += refillSale.tax
+            portfolio = refillSale.remainingPortfolio
+            costBasis = refillSale.remainingCostBasis
+            bufferRefill = refillSale.netProceeds
+            cashBuffer += refillSale.netProceeds
+          }
         }
       }
     }
 
-    const {
-      remainingPortfolio: postStampPortfolio,
-      remainingCostBasis: postStampCostBasis,
-      stampDuty
-    } = applyStampDuty(portfolio, costBasis, plan.stampDutyRate ?? 0)
-    portfolio = postStampPortfolio
-    costBasis = postStampCostBasis
+    // Hard rebalancing a fine anno (threshold / annual) prima dell'imposta di bollo
+    let rebalanceTaxPaid = 0
+    if (buckets && ma && assetTaxRates && targetWeightsNow && !depleted && portfolio > 0) {
+      const rb = rebalanceBuckets(buckets, targetWeightsNow, ma.rebalance, assetTaxRates)
+      if (rb.grossSale > 0) {
+        grossSale += rb.grossSale
+        taxPaid += rb.taxPaid
+        rebalanceTaxPaid = rb.taxPaid
+        syncFromBuckets()
+      }
+    }
+
+    let stampDuty = 0
+    if (buckets) {
+      for (const id of ASSET_CLASS_IDS) {
+        const r = applyStampDuty(buckets[id].value, buckets[id].costBasis, plan.stampDutyRate ?? 0)
+        buckets[id].value = r.remainingPortfolio
+        buckets[id].costBasis = r.remainingCostBasis
+        stampDuty += r.stampDuty
+      }
+      syncFromBuckets()
+    } else {
+      const stamped = applyStampDuty(portfolio, costBasis, plan.stampDutyRate ?? 0)
+      portfolio = stamped.remainingPortfolio
+      costBasis = stamped.remainingCostBasis
+      stampDuty = stamped.stampDuty
+    }
     taxPaid += stampDuty
     const stampDutyPaid = stampDuty
 
     if (portfolio <= 1e-9) {
       portfolio = 0
       costBasis = 0
+      if (buckets) {
+        for (const id of ASSET_CLASS_IDS) {
+          buckets[id].value = 0
+          buckets[id].costBasis = 0
+        }
+      }
     }
     if (cashBuffer <= 1e-9) {
       cashBuffer = 0
@@ -530,6 +686,13 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
             cashBufferMovement: bufferRefill - bufferWithdrawal
           }
         : {}),
+      ...(buckets && targetWeightsNow
+        ? {
+            buckets: cloneBuckets(buckets),
+            targetWeights: targetWeightsNow,
+            rebalanceTaxPaid
+          }
+        : {}),
       returnRate,
       ...(inflations ? { inflationRate: inflationForYear(year) } : {}),
       investmentReturn,
@@ -539,6 +702,8 @@ export function runProjection(plan: Plan, returns: number[], inflations?: number
       expensesNotCovered,
       depleted
     })
+
+    prevYearReturn = returnRate
   }
 
   return states

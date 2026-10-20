@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { SimStats } from '../engine/stats'
   import { HISTORICAL_DATASET_LABELS } from '../engine/historicalData'
+  import { computeTargetWeights } from '../engine/allocation'
+  import { effectiveStopYear } from '../engine/projection'
   import { formatEur, formatPct } from '../format'
   import { planStore } from '../stores/plan.svelte'
 
@@ -22,6 +24,20 @@
     }
     const variant = mode.stationary ? 'stazionario' : `blocchi ${mode.blockSize ?? 5} anni`
     return `Block bootstrap ${variant} · ${dataset} · azionario ${alloc}%`
+  })
+
+  let allocationLabel = $derived.by(() => {
+    const plan = planStore.committedPlan
+    if (!plan.multiAsset) return null
+    const w = computeTargetWeights(plan.multiAsset.glidepath, 0, effectiveStopYear(plan))
+    const pct = (x: number) => Math.round(x * 100)
+    const rebalance =
+      plan.multiAsset.rebalance.mode === 'cashflowOnly'
+        ? 'solo flussi'
+        : plan.multiAsset.rebalance.mode === 'annual'
+          ? 'annuale'
+          : `a soglia ±${Math.round(plan.multiAsset.rebalance.band * 100)}%`
+    return `Multi-asset ${pct(w.equity)}/${pct(w.bonds)}/${pct(w.cash)} Eq/Obbl/Liq · ribilanciamento ${rebalance}`
   })
 
   let rateClass = $derived(
@@ -58,7 +74,9 @@
 
 <section class="card">
   <h2>Risultati ({stats.runs} simulazioni)</h2>
-  <p class="derived">{simulationLabel}</p>
+  <p class="derived">
+    {simulationLabel}{#if allocationLabel}{' · '}{allocationLabel}{/if}
+  </p>
 
   <div class="success-rate {rateClass}">
     <span class="value">{formatPct(stats.successRate)}</span>

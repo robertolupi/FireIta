@@ -1,9 +1,14 @@
 import type {
+  AssetClassId,
+  AssetWeights,
   CashBufferConfig,
   CashflowTiming,
+  GlidepathConfig,
   LifeEvent,
+  MultiAssetConfig,
   PensionFundConfig,
   Plan,
+  RebalanceStrategy,
   SimulationMode,
   WithdrawalStrategy,
   YearState
@@ -196,8 +201,7 @@ function sanitizeDatasetId(raw: unknown): 'usa' | 'italia' | undefined {
   return raw === 'usa' || raw === 'italia' ? raw : undefined
 }
 
-function sanitizeSimulationMode(raw: unknown): SimulationMode | undefined {
-  if (!raw || typeof raw !== 'object') return undefined
+function sanitizeSimulationMode(raw: unknown): SimulationMode | undefined {  if (!raw || typeof raw !== 'object') return undefined
   const sm = raw as Record<string, unknown>
 
   if (sm.type === 'parametric') return { type: 'parametric' }
@@ -227,6 +231,107 @@ function sanitizeSimulationMode(raw: unknown): SimulationMode | undefined {
   }
 
   return undefined
+}
+
+function sanitizeAssetWeights(raw: unknown, fallback: AssetWeights): AssetWeights | undefined {
+  if (!raw || typeof raw !== 'object') return fallback
+  const w = raw as Record<string, unknown>
+  const equity = finiteNumber(w.equity, fallback.equity, 0, 1)
+  const bonds = finiteNumber(w.bonds, fallback.bonds, 0, 1)
+  const cash = finiteNumber(w.cash, fallback.cash, 0, 1)
+  if (equity + bonds + cash <= 0) return undefined
+  return { equity, bonds, cash }
+}
+
+function sanitizeGlidepath(raw: unknown): GlidepathConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const g = raw as Record<string, unknown>
+
+  if (g.type === 'static') {
+    const weights = sanitizeAssetWeights(g.weights, { equity: 1, bonds: 0, cash: 0 })
+    if (weights === undefined) return undefined
+    return { type: 'static', weights }
+  }
+
+  if (g.type === 'bondTent') {
+    const accumulationWeights = sanitizeAssetWeights(g.accumulationWeights, {
+      equity: 0.8,
+      bonds: 0.2,
+      cash: 0
+    })
+    const peakWeights = sanitizeAssetWeights(g.peakWeights, { equity: 0.4, bonds: 0.5, cash: 0.1 })
+    const postTentWeights = sanitizeAssetWeights(g.postTentWeights, {
+      equity: 0.7,
+      bonds: 0.3,
+      cash: 0
+    })
+    if (
+      accumulationWeights === undefined ||
+      peakWeights === undefined ||
+      postTentWeights === undefined
+    ) {
+      return undefined
+    }
+    return {
+      type: 'bondTent',
+      accumulationWeights,
+      peakWeights,
+      postTentWeights,
+      yearsBeforeRetirement: Math.round(finiteNumber(g.yearsBeforeRetirement, 5, 0, 30)),
+      yearsAfterRetirement: Math.round(finiteNumber(g.yearsAfterRetirement, 10, 0, 30))
+    }
+  }
+
+  return undefined
+}
+
+function sanitizeRebalanceStrategy(raw: unknown): RebalanceStrategy {
+  if (!raw || typeof raw !== 'object') return { mode: 'threshold', band: 0.05 }
+  const r = raw as Record<string, unknown>
+  if (r.mode === 'cashflowOnly') return { mode: 'cashflowOnly' }
+  if (r.mode === 'annual') return { mode: 'annual' }
+  if (r.mode === 'threshold') {
+    return { mode: 'threshold', band: finiteNumber(r.band, 0.05, 0, 0.5) }
+  }
+  return { mode: 'threshold', band: 0.05 }
+}
+
+function sanitizeMultiAsset(raw: unknown): MultiAssetConfig | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const ma = raw as Record<string, unknown>
+  if (!ma.assets || typeof ma.assets !== 'object') return undefined
+  const rawAssets = ma.assets as Record<string, unknown>
+
+  const assetIds: AssetClassId[] = ['equity', 'bonds', 'cash']
+  const defaults: Record<AssetClassId, { meanReturn: number; returnStdDev: number; taxRate: number }> = {
+    equity: { meanReturn: 0.05, returnStdDev: 0.15, taxRate: 0.26 },
+    bonds: { meanReturn: 0.02, returnStdDev: 0.06, taxRate: 0.125 },
+    cash: { meanReturn: 0.015, returnStdDev: 0.01, taxRate: 0.26 }
+  }
+  const assets = {} as MultiAssetConfig['assets']
+  for (const id of assetIds) {
+    const raw = rawAssets[id]
+    if (!raw || typeof raw !== 'object') return undefined
+    const a = raw as Record<string, unknown>
+    assets[id] = {
+      id,
+      meanReturn: finiteNumber(a.meanReturn, defaults[id].meanReturn, -0.5, 1),
+      returnStdDev: finiteNumber(a.returnStdDev, defaults[id].returnStdDev, 0, 2),
+      taxRate: finiteNumber(a.taxRate, defaults[id].taxRate, 0, 1)
+    }
+  }
+
+  const rawCorr = (ma.correlations ?? {}) as Record<string, unknown>
+  const correlations = {
+    equityBonds: finiteNumber(rawCorr.equityBonds, -0.1, -0.99, 0.99),
+    equityCash: finiteNumber(rawCorr.equityCash, 0, -0.99, 0.99),
+    bondsCash: finiteNumber(rawCorr.bondsCash, 0.1, -0.99, 0.99)
+  }
+
+  const glidepath = sanitizeGlidepath(ma.glidepath)
+  if (glidepath === undefined) return undefined
+
+  return { assets, correlations, glidepath, rebalance: sanitizeRebalanceStrategy(ma.rebalance) }
 }
 
 export function sanitizePlan(raw: unknown): Plan {
@@ -299,6 +404,11 @@ export function sanitizePlan(raw: unknown): Plan {
   const simulationMode = sanitizeSimulationMode(obj.simulationMode)
   if (simulationMode !== undefined) {
     sanitized.simulationMode = simulationMode
+  }
+
+  const multiAsset = sanitizeMultiAsset(obj.multiAsset)
+  if (multiAsset !== undefined) {
+    sanitized.multiAsset = multiAsset
   }
 
   return sanitized

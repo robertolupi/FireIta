@@ -8,6 +8,7 @@
   import FanChart from './lib/components/FanChart.svelte'
   import SensitivityMatrix from './lib/components/SensitivityMatrix.svelte'
   import GoalSeekCard from './lib/components/GoalSeekCard.svelte'
+  import GlidepathChart from './lib/components/GlidepathChart.svelte'
   import YearTable from './lib/components/YearTable.svelte'
 
   let stats = $derived(planStore.stats)
@@ -86,6 +87,7 @@
           valueMode={planStore.valueMode}
         />
         <GoalSeekCard />
+        <GlidepathChart />
         <SensitivityMatrix />
         {#if stats.medianRun}
           <YearTable percentileRuns={stats.percentileRuns} years={stats.medianRun.years} />

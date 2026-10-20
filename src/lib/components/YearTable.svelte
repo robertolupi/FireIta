@@ -26,6 +26,7 @@
   let years = $derived<YearState[]>(activeRun?.years ?? fallbackYears)
   let hasPensionFund = $derived(years.some((y) => y.pensionFundBalance !== undefined))
   let hasCashBuffer = $derived(years.some((y) => y.cashBufferEnd !== undefined))
+  let hasMultiAsset = $derived(years.some((y) => y.buckets !== undefined))
   let unitSuffix = $derived(planStore.valueMode === 'real' ? '€ (reali)' : '€ (nom.)')
 
   let firstDepletionIndex = $derived(years.findIndex((y) => y.depleted || y.endPortfolio <= 0))
@@ -129,6 +130,11 @@
             </th>
           {/if}
           <th>Patrimonio fine anno {unitSuffix}</th>
+          {#if hasMultiAsset && showDetailed}
+            <th title="Valore di mercato del bucket azionario a fine anno">Azioni {unitSuffix}</th>
+            <th title="Valore di mercato del bucket obbligazionario a fine anno">Obbligazioni {unitSuffix}</th>
+            <th title="Valore di mercato del bucket liquidità a fine anno">Liquidità {unitSuffix}</th>
+          {/if}
           {#if showDetailed}
             <th title="Prezzo Medio di Carico residuo esente da imposta sul capital gain">
               PMC residuo {unitSuffix}
@@ -173,6 +179,9 @@
               title={[
                 y.stampDutyPaid && y.stampDutyPaid > 0
                   ? `di cui imposta di bollo: ${formatEur(y.stampDutyPaid)}`
+                  : '',
+                y.rebalanceTaxPaid && y.rebalanceTaxPaid > 0
+                  ? `di cui tasse da ribilanciamento: ${formatEur(y.rebalanceTaxPaid)}`
                   : '',
                 y.grossSale > 0 ? `incidenza su vendita lorda: ${formatPct(effectiveSaleTaxPct)}` : ''
               ]
@@ -247,6 +256,17 @@
                 (esaurito)
               {/if}
             </td>
+            {#if hasMultiAsset && showDetailed}
+              <td title={y.buckets ? `PMC: ${formatEur(y.buckets.equity.costBasis)} · target: ${formatPct(y.targetWeights?.equity ?? 0)}` : undefined}>
+                {formatEur(y.buckets?.equity.value ?? 0)}
+              </td>
+              <td title={y.buckets ? `PMC: ${formatEur(y.buckets.bonds.costBasis)} · target: ${formatPct(y.targetWeights?.bonds ?? 0)}` : undefined}>
+                {formatEur(y.buckets?.bonds.value ?? 0)}
+              </td>
+              <td title={y.buckets ? `PMC: ${formatEur(y.buckets.cash.costBasis)} · target: ${formatPct(y.targetWeights?.cash ?? 0)}` : undefined}>
+                {formatEur(y.buckets?.cash.value ?? 0)}
+              </td>
+            {/if}
             {#if showDetailed}
               <td title="Plusvalenza latente: {formatPct(latentGainPct)}">
                 <span>{formatEur(y.endCostBasis)}</span>
@@ -282,6 +302,11 @@
               <td><strong>{formatEur(lastYear?.cashBufferEnd ?? 0)}</strong></td>
             {/if}
             <td><strong>{formatEur(lastYear?.endPortfolio ?? 0)}</strong></td>
+            {#if hasMultiAsset && showDetailed}
+              <td><strong>{formatEur(lastYear?.buckets?.equity.value ?? 0)}</strong></td>
+              <td><strong>{formatEur(lastYear?.buckets?.bonds.value ?? 0)}</strong></td>
+              <td><strong>{formatEur(lastYear?.buckets?.cash.value ?? 0)}</strong></td>
+            {/if}
             {#if showDetailed}
               <td><strong>{formatEur(lastYear?.endCostBasis ?? 0)}</strong></td>
             {/if}

@@ -58,6 +58,63 @@ export interface PensionFundConfig {
 
 export type CashflowTiming = 'legacy' | 'startOfYear' | 'midYear'
 
+export type AssetClassId = 'equity' | 'bonds' | 'cash'
+
+export interface AssetClassParams {
+  id: AssetClassId
+  meanReturn: number
+  returnStdDev: number
+  /** Aliquota capital gains dell'asset (es. 0.26 ETF azionari, 0.125 governativi White List) */
+  taxRate: number
+}
+
+export interface AssetWeights {
+  equity: number
+  bonds: number
+  cash: number
+}
+
+export type AssetYearReturns = Record<AssetClassId, number>
+
+/** Rendimenti annuali accettati da runProjection: scalare (legacy) o per asset class */
+export type ProjectionReturns = Array<number | AssetYearReturns>
+
+export type GlidepathConfig =
+  | { type: 'static'; weights: AssetWeights }
+  | {
+      type: 'bondTent'
+      accumulationWeights: AssetWeights
+      /** Allocazione al picco difensivo nell'anno di pensionamento */
+      peakWeights: AssetWeights
+      postTentWeights: AssetWeights
+      /** Anni prima del pensionamento in cui inizia il de-risking */
+      yearsBeforeRetirement: number
+      /** Anni dopo il pensionamento in cui termina la risalita azionaria */
+      yearsAfterRetirement: number
+    }
+
+export type RebalanceStrategy =
+  | { mode: 'cashflowOnly' }
+  | { mode: 'threshold'; band: number }
+  | { mode: 'annual' }
+
+export interface MultiAssetConfig {
+  assets: Record<AssetClassId, AssetClassParams>
+  correlations: {
+    equityBonds: number
+    equityCash: number
+    bondsCash: number
+  }
+  glidepath: GlidepathConfig
+  rebalance: RebalanceStrategy
+}
+
+export interface AssetBuckets {
+  equity: { value: number; costBasis: number }
+  bonds: { value: number; costBasis: number }
+  cash: { value: number; costBasis: number }
+}
+
 export interface HistoricalYearData {
   calendarYear: number
   equityReturn: number
@@ -126,6 +183,8 @@ export interface Plan {
   cashBuffer?: CashBufferConfig
   /** Modalità di generazione dei rendimenti/inflazione (default: parametrica log-normale) */
   simulationMode?: SimulationMode
+  /** Configurazione opzionale portafoglio multi-asset (equity/bonds/cash) con glidepath */
+  multiAsset?: MultiAssetConfig
   withdrawalStrategy: WithdrawalStrategy
   events: LifeEvent[]
 }
@@ -160,6 +219,12 @@ export interface YearState {
   returnRate: number
   /** Tasso di inflazione applicato nell'anno (presente solo con simulazione a inflazione stocastica) */
   inflationRate?: number
+  /** Valore e cost basis per asset class a fine anno (presente solo in modalità multi-asset) */
+  buckets?: AssetBuckets
+  /** Pesi target del glidepath nell'anno (presente solo in modalità multi-asset) */
+  targetWeights?: AssetWeights
+  /** Imposte pagate nell'anno per hard rebalancing (presente solo in modalità multi-asset) */
+  rebalanceTaxPaid?: number
   investmentReturn: number
   startPortfolio: number
   endPortfolio: number

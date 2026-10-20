@@ -226,8 +226,8 @@ export const HISTORICAL_DATASETS: Record<HistoricalDatasetId, HistoricalYearData
 }
 
 export const HISTORICAL_DATASET_LABELS: Record<HistoricalDatasetId, string> = {
-  usa: 'USA 1928–2024 (S&P 500 / Treasury 10y / CPI)',
-  italia: 'Italia 1950–2024 (mercati USA proxy / inflazione FOI ISTAT)'
+  usa: 'USA 1928–2024 (S&P 500 / Treasury / CPI)',
+  italia: 'Italia 1950–2024 (infl. ISTAT)'
 }
 
 /** Rendimento annuo di portafoglio azioni/obbligazioni; stockAllocation è clappato in [0,1] */

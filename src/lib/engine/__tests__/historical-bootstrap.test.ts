@@ -260,7 +260,7 @@ describe('block bootstrap', () => {
     expect(a.inflations).toEqual(b.inflations)
     expect(a.returns).toHaveLength(12)
     for (let t = 0; t < 12; t++) {
-      expect(a.inflations[t] * 2).toBeCloseTo(a.returns[t], 12)
+      expect(a.inflations[t] * 2).toBeCloseTo(a.returns[t] as number, 12)
     }
   })
 

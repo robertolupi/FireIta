@@ -64,7 +64,7 @@ Ogni voce nella checklist qui sotto punta al relativo documento di progettazione
   - **Sintesi**: Corregge l'indicizzazione all'inflazione del prelievo nella strategia `guardrails` (Guyton-Klinger) e introduce le strategie `constantDollar` (4% rule classica), `spendExpenses` (fabbisogno puro senza cap) e `vpw` (*Variable Percentage Withdrawal*).
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/projection.ts`, `src/lib/components/PlanForm.svelte`, `src/lib/engine/__tests__/guardrails.test.ts`.
 
-- [ ] **[10 — Asset Allocation Multi-Asset, Ribilanciamento e Glidepath (Bond Tent)](./10-engine-multi-asset-glidepath.md)**
+- [x] **[10 — Asset Allocation Multi-Asset, Ribilanciamento e Glidepath (Bond Tent)](./10-engine-multi-asset-glidepath.md)**
   - **Complessità**: 🔴 Alta
   - **Sintesi**: Modella portafogli multi-asset (Azioni, Obbligazioni, Liquidità) con correlazione, supporto a *Glidepath / Bond Tent* intorno alla data di ritiro e ribilanciamento fiscalmente efficiente per il regime amministrato italiano.
   - **File principali**: `src/lib/engine/types.ts`, `src/lib/engine/montecarlo.ts`, `src/lib/engine/projection.ts`, `src/lib/components/PlanForm.svelte`.

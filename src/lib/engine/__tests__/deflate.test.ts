@@ -117,4 +117,41 @@ describe('deflate — Valori Reali vs Nominali', () => {
     expect(real.meanShortfallYears).toBe(raw.meanShortfallYears)
     expect(real.finalPercentiles.p50).toBeLessThan(raw.finalPercentiles.p50)
   })
+
+  it('6. Deflazione dei bucket multi-asset e rebalanceTaxPaid', () => {
+    const d5 = inflationDivisor(5, 2026, 0.02)
+    const state: any = {
+      year: 5,
+      calendarYear: 2031,
+      income: 10_000,
+      expenses: 8_000,
+      contribution: 2_000,
+      withdrawal: 0,
+      grossSale: 0,
+      taxPaid: 100,
+      investmentReturn: 5_000,
+      startPortfolio: 100_000,
+      endPortfolio: 107_000,
+      endCostBasis: 80_000,
+      rebalanceTaxPaid: 500,
+      buckets: {
+        equity: { value: 60_000, costBasis: 40_000 },
+        bonds: { value: 30_000, costBasis: 25_000 },
+        cash: { value: 17_000, costBasis: 15_000 }
+      }
+    }
+
+    const deflated = deflateYearState(state, 2026, 0.02)
+    expect(deflated.rebalanceTaxPaid).toBeCloseTo(500 / d5, 9)
+    expect(deflated.buckets!.equity.value).toBeCloseTo(60_000 / d5, 9)
+    expect(deflated.buckets!.equity.costBasis).toBeCloseTo(40_000 / d5, 9)
+    expect(deflated.buckets!.bonds.value).toBeCloseTo(30_000 / d5, 9)
+    expect(deflated.buckets!.cash.value).toBeCloseTo(17_000 / d5, 9)
+
+    const sumRealBuckets =
+      deflated.buckets!.equity.value +
+      deflated.buckets!.bonds.value +
+      deflated.buckets!.cash.value
+    expect(sumRealBuckets).toBeCloseTo(deflated.endPortfolio, 9)
+  })
 })

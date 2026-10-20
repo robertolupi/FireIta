@@ -172,6 +172,34 @@ export interface YearState {
 }
 ```
 
+### 3.5 Integrazione con i miglioramenti successivi (08, 11, 12)
+
+Il documento precede l'implementazione dei miglioramenti 08, 11 e 12; le decisioni di
+integrazione effettivamente adottate sono:
+
+1. **Firma di `runProjection`**: il parametro `returns` diventa
+   `ProjectionReturns = Array<number | AssetYearReturns>` con
+   `AssetYearReturns = Record<AssetClassId, number>`. Il percorso scalare legacy resta
+   invariato bit-a-bit (lo attesta il test di equivalenza mono-asset).
+2. **Modalità storiche (#08)**: con `multiAsset` attivo, `historicalRolling` e
+   `blockBootstrap` alimentano i bucket con i rendimenti storici per asset
+   (`equity`/`bonds` dal dataset); il bucket `cash` usa il `meanReturn` configurato (non
+   esiste una serie monetaria bundled). `stockAllocation` è ignorato: i pesi li detta il
+   glidepath.
+3. **Cash asset vs Cash Buffer (#11)**: il bucket `cash` è allocazione strategica dentro il
+   portafoglio (soggetta a imposta di bollo); il Cash Buffer resta il cuscinetto tattico
+   anti-drawdown fuori portafoglio. Il segnale di stress del buffer (`isMarketStressed`)
+   usa il rendimento del bucket `equity` in modalità multi-asset.
+4. **Segnali blended**: `returnRate` in `YearState`, il rendimento del Fondo Pensione e il
+   `prevReturn` di `guardrails` usano il rendimento blended pesato sui bucket a inizio
+   anno; `vpw` usa il `meanReturn` blended ai pesi target correnti.
+5. **Aliquote per-bucket**: in modalità multi-asset `assets.*.taxRate` sostituisce il blend
+   `taxRate`/`whitelistAllocation` per le vendite di portafoglio.
+6. **Ordine infra-annuale**: rendimenti → flussi (soft rebalancing su versamenti/prelievi)
+   → hard rebalancing (threshold/annual) → imposta di bollo (applicata per bucket).
+7. **Web Worker (#12)**: nessun impatto — `multiAsset` è dato pianinamente serializzabile e
+   `runMonteCarlo(plan)` mantiene la firma.
+
 ---
 
 ## 4. Step di Implementazione
